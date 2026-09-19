@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fair Draw</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Public+Sans:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --paper:  #f6f1e7;
+    --card:   #fffdf8;
+    --ink:    #1f1a15;
+    --muted:  #6f665a;
+    --line:   #e3d9c7;
+    --prize:  #c1440e;      /* raffle-ticket orange */
+    --seal:   #15654a;
+    --seal-soft: #e7f0ea;
+    --alarm:  #a4321f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'Public Sans', system-ui, sans-serif; line-height: 1.6;
+    display: flex; justify-content: center; padding: 0 1.25rem 5rem;
+  }
+  main { width: 100%; max-width: 40rem; }
+
+  /* ---------- hero, styled as a ticket stub ---------- */
+  .hero { padding: 4rem 0 2.5rem; text-align: center; }
+  .kicker {
+    font-size: .74rem; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--prize); margin: 0 0 1.1rem;
+  }
+  h1 {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-weight: 800; font-size: clamp(2.3rem, 8vw, 3.9rem); line-height: 1.02;
+    letter-spacing: -.035em; margin: 0 0 1.1rem;
+  }
+  .lede { color: var(--muted); font-size: 1.1rem; max-width: 31rem; margin: 0 auto; }
+
+  /* ---------- the three steps ---------- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: .9rem; margin: 2.8rem 0 3.2rem; }
+  .step {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.1rem .95rem; text-align: center;
+  }
+  .step .n {
+    display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem;
+    border-radius: 50%; background: var(--prize); color: #fff;
+    font-weight: 700; font-size: .88rem; margin-bottom: .6rem;
+  }
+  .step p { margin: 0; font-size: .88rem; line-height: 1.45; }
+  .step b { display: block; font-weight: 600; margin-bottom: .2rem; }
+  @media (max-width: 34rem) { .steps { grid-template-columns: 1fr; } .step { text-align: left; display: flex; gap: .9rem; align-items: flex-start; } .step .n { margin: 0; flex: 0 0 auto; } }
+
+  /* ---------- the comparison ---------- */
+  .versus { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 3rem; }
+  .versus h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 1.25rem; margin: 0; padding: 1.2rem 1.4rem .3rem; letter-spacing: -.02em; }
+  .versus > p { margin: 0; padding: 0 1.4rem 1.1rem; color: var(--muted); font-size: .92rem; }
+  .versus table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .versus th, .versus td { padding: .65rem 1.4rem; text-align: left; border-top: 1px solid var(--line); }
+  .versus th { font-weight: 600; color: var(--muted); font-size: .8rem; }
+  .versus td:last-child, .versus th:last-child { text-align: center; width: 7.5rem; background: var(--seal-soft); }
+  .versus .no { color: var(--muted); }
+  .versus .yes { color: var(--seal); font-weight: 700; }
+
+  /* ---------- cards, with a perforated top edge ---------- */
+  section {
+    position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1.7rem; margin-bottom: 1.1rem;
+  }
+  section::before {
+    content: ''; position: absolute; left: 1.2rem; right: 1.2rem; top: 2.9rem;
+    border-top: 2px dotted var(--line);
+  }
+  h2 {
+    font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .13em;
+    color: var(--prize); margin: 0 0 2rem;
+  }
+
+  label { display: block; font-size: .88rem; font-weight: 600; margin-bottom: .35rem; }
+  .hint { font-size: .83rem; color: var(--muted); font-weight: 400; margin: -.2rem 0 .5rem; }
+
+  textarea, input[type=text], input[type=number], select {
+    font: inherit; font-size: .95rem; width: 100%; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 7px; padding: .65rem .8rem;
+  }
+  textarea { min-height: 9rem; resize: vertical; line-height: 1.5; }
+  textarea:focus, input:focus, select:focus { outline: 2px solid var(--prize); outline-offset: 1px; border-color: var(--prize); }
+
+  .row { display: flex; gap: .9rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .row > div { flex: 1; min-width: 9rem; }
+
+  button {
+    font: inherit; font-size: .95rem; font-weight: 600; background: var(--prize); color: #fff;
+    border: 0; border-radius: 999px; padding: .72rem 1.7rem; cursor: pointer; transition: opacity .18s;
+  }
+  button:hover { opacity: .87; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button[disabled] { opacity: .4; cursor: default; }
+  button.quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+
+  .seal { background: var(--seal-soft); border: 1px solid #c9dfd3; border-radius: 10px; padding: 1.2rem 1.3rem; margin-top: 1.2rem; }
+  .seal h3 { margin: 0 0 .5rem; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--seal); }
+  code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; word-break: break-all; line-height: 1.5; }
+
+  ol.winners { margin: .6rem 0 0; padding-left: 1.4rem; }
+  ol.winners li {
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.45rem; font-weight: 800;
+    letter-spacing: -.02em; padding: .12rem 0;
+  }
+
+  .working { border-top: 1px dotted var(--line); margin-top: 1.3rem; padding-top: 1.1rem; }
+  .working dl { display: grid; grid-template-columns: auto 1fr; gap: .45rem 1.1rem; margin: 0; font-size: .84rem; }
+  .working dt { color: var(--muted); }
+  .working dd { margin: 0; }
+
+  .bad { color: var(--alarm); font-weight: 600; }
+  .good { color: var(--seal); font-weight: 600; }
+  .status { font-size: .88rem; color: var(--muted); margin-top: .9rem; min-height: 1.3em; }
+  .hidden { display: none; }
+
+  footer { margin-top: 3rem; font-size: .9rem; color: var(--muted); line-height: 1.7; }
+  footer strong { color: var(--ink); font-weight: 600; }
+  footer summary { list-style: none; padding: .55rem 0; border-top: 1px solid var(--line); }
+  footer summary::-webkit-details-marker { display: none; }
+  footer summary::before { content: '+ '; color: var(--prize); font-weight: 700; }
+  footer details[open] summary::before { content: '\2013 '; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+
+<div id="fileWarn" class="hidden" style="background:#fdf3e7;border:1px solid #e8d9c0;border-radius:8px;padding:.9rem 1.1rem;margin-bottom:1.5rem;font-size:.9rem">
+  <strong>This page is open from a file.</strong> Browsers block file-opened pages
+  from calling the internet, so the draw cannot read the chain. Serve it instead —
+  in this folder run <code>npx serve</code> and open the address it prints.
+</div>
+
+<section id="guest" class="hidden" style="border-color:#cfe2d7">
+  <h2 id="guestHead">Someone sent you this draw</h2>
+  <div id="guestBody"></div>
+  <div style="margin-top:1.3rem">
+    <label for="guestName">Find your name</label>
+    <input type="text" id="guestName" placeholder="Type your name" spellcheck="false">
+    <p class="status" id="guestFound"></p>
+  </div>
+  <details style="margin-top:1.1rem">
+    <summary style="cursor:pointer;font-size:.88rem;font-weight:600">
+      Everyone in the draw (<span id="guestCount"></span>)
+    </summary>
+    <ol id="guestList" style="font-size:.9rem;margin:.7rem 0 0;padding-left:1.6rem;max-height:18rem;overflow:auto"></ol>
+  </details>
+  <p style="margin:1.3rem 0 0"><button class="quiet" id="guestOrganise">I want to run my own draw</button></p>
+</section>
+
+<div class="hero" id="mainTitle">
+  <p class="kicker">Raffles · prize draws · giveaways</p>
+  <h1>Pick a winner<br>nobody can dispute</h1>
+  <p class="lede" id="mainLede">Every other way of drawing a name asks people to trust you.
+  This one doesn't. Everyone gets a link that proves the draw was fair — and it's free.</p>
+  <p style="font-size:.7rem;color:var(--muted);margin:1.6rem 0 0">build 10</p>
+</div>
+
+<div class="steps" id="stepsBlock">
+  <div class="step">
+    <div class="n">1</div>
+    <p><b>Lock in the names</b>The list is published and stamped with the time, so it can't be changed later.</p>
+  </div>
+  <div class="step">
+    <div class="n">2</div>
+    <p><b>Wait a few minutes</b>A number nobody can predict decides the winners. Not even you.</p>
+  </div>
+  <div class="step">
+    <div class="n">3</div>
+    <p><b>Send the link</b>Anyone can open it and check the result for themselves.</p>
+  </div>
+</div>
+
+<div class="versus" id="versusBlock">
+  <h3>Why not just spin a wheel?</h3>
+  <p>Because a spinner spins on your screen. You can spin it ten times and show
+     people the one you liked, and there is no way for them to know.</p>
+  <table>
+    <tr>
+      <th>&nbsp;</th>
+      <th>Wheels, hats,<br>comment pickers</th>
+      <th>Fair&nbsp;Draw</th>
+    </tr>
+    <tr>
+      <td>Can the organiser quietly try again until they like the result?</td>
+      <td class="no">Yes, invisibly</td>
+      <td class="yes">No</td>
+    </tr>
+    <tr>
+      <td>Can someone check they were actually in the list?</td>
+      <td class="no">No</td>
+      <td class="yes">Yes</td>
+    </tr>
+    <tr>
+      <td>Can a stranger verify the result afterwards?</td>
+      <td class="no">No</td>
+      <td class="yes">Yes</td>
+    </tr>
+    <tr>
+      <td>Account, app or payment needed?</td>
+      <td class="no">Varies</td>
+      <td class="yes">None</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ------------------------------------------------------------- step one -->
+<section id="setupCard">
+  <h2>1 · Set up the draw</h2>
+
+  <details style="margin-bottom:1.3rem">
+    <summary style="cursor:pointer;font-size:.82rem;color:var(--muted)">Advanced settings</summary>
+    <div style="margin-top:.7rem">
+      <label for="api">Data source</label>
+      <p class="hint">Leave this alone unless you know why you're changing it.</p>
+      <input type="text" id="api" value="https://api.kaspa.org" spellcheck="false">
+    </div>
+  </details>
+
+  <label for="entrants">Everyone in the draw</label>
+  <p class="hint">One name per line. Duplicates are allowed — two lines means two chances.</p>
+  <textarea id="entrants" spellcheck="false" placeholder="Aisha Bello&#10;Tom Reilly&#10;Priya Shah&#10;…"></textarea>
+
+  <div class="row" style="margin-top:1rem">
+    <div>
+      <label for="winners">How many winners</label>
+      <input type="number" id="winners" value="1" min="1" max="50">
+    </div>
+    <div>
+      <label for="delay">Decide it in</label>
+      <select id="delay" title="How far ahead the deciding block sits. Anything over a minute is plenty for unpredictability; longer just gives you time to send the commitment round first.">
+        <option value="1">1 minute</option>
+        <option value="2">2 minutes</option>
+        <option value="5">5 minutes</option>
+        <option value="15" selected>15 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="240">4 hours</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="commit">Lock it in</button>
+  <p class="status" id="setupStatus"></p>
+
+  <div class="seal hidden" id="sealBox">
+    <h3>Share this before the draw</h3>
+    <p style="margin:.2rem 0 .7rem;font-size:.9rem">
+      Send this to everyone entering, before the draw happens. It fixes the list
+      and the timing — change a single name afterwards and it will no longer
+      match, which anyone can check.
+    </p>
+    <dl class="working" style="border:0;margin:0;padding:0">
+      <dt>Entrants</dt><dd id="sealCount"></dd>
+      <dt>Winners</dt><dd id="sealWinners"></dd>
+      <dt>Drawn at</dt><dd id="sealTarget"></dd>
+      <dt>Fingerprint of the list</dt><dd class="mono" id="sealHash"></dd>
+      <dt>Public record</dt><dd class="mono" id="sealAnchor"></dd>
+    </dl>
+    <div id="dupeBox" class="hidden" style="margin-top:.9rem;padding:.7rem .85rem;background:#fff;border:1px solid #e8d9c0;border-radius:6px">
+      <strong style="font-size:.85rem">Names entered more than once</strong>
+      <div id="dupeList" style="font-size:.86rem;margin-top:.3rem"></div>
+    </div>
+
+    <details style="margin-top:.9rem">
+      <summary style="cursor:pointer;font-size:.88rem;font-weight:600">
+        Show everyone in the draw (<span id="listCount"></span>)
+      </summary>
+      <ol id="publicList" style="font-size:.9rem;margin:.7rem 0 0;padding-left:1.6rem;max-height:16rem;overflow:auto"></ol>
+    </details>
+
+    <label for="shareUrl" style="margin-top:1rem">Link to send everyone</label>
+    <p class="hint">Everything is in this link — the names, the timing, the proof. They just click it.</p>
+    <input type="text" id="shareUrl" readonly spellcheck="false" style="font-size:.8rem">
+    <div id="qrWrap" class="hidden" style="margin-top:1rem;text-align:center">
+      <div id="qr" style="display:inline-block;padding:.8rem;background:#fff;border:1px solid var(--line);border-radius:8px"></div>
+      <p class="hint" style="margin:.5rem 0 0">Hold this up and let people scan it.</p>
+    </div>
+    <p id="qrNote" class="hint hidden" style="margin-top:.8rem"></p>
+
+    <p style="margin:.7rem 0 0">
+      <button id="copyLink">Copy link</button>
+      <button class="quiet" id="copySeal" style="margin-left:.4rem">Copy as text instead</button>
+    </p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- step two -->
+<section id="drawCard" class="hidden">
+  <h2>2 · Run the draw</h2>
+  <p class="hint" style="margin-top:-.5rem">
+    Nothing can be drawn until the chosen moment passes. Until then this will
+    tell you to wait.
+  </p>
+
+  <p style="margin-top:1rem"><button id="draw">Draw the winners</button></p>
+  <p class="status" id="drawStatus"></p>
+
+  <div class="hidden" id="resultBox">
+    <div class="seal">
+      <h3>Winners</h3>
+      <ol class="winners" id="winnerList"></ol>
+    </div>
+    <div class="working">
+      <dl>
+        <dt>Deciding number</dt><dd class="mono" id="blockHash"></dd>
+        <dt>Taken at</dt><dd id="blockDaa"></dd>
+        <dt>Fingerprint of the list</dt><dd class="mono" id="resultSeal"></dd>
+      </dl>
+      <p style="margin:.9rem 0 0"><button class="quiet" id="copyResult">Copy the result</button></p>
+    </div>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------- step three -->
+<section>
+  <h2>3 · Check a draw someone sent you</h2>
+  <p class="hint" style="margin-top:-.5rem">
+    If you were sent a link, just open it — there is nothing to do here. This is
+    for checking a draw that arrived as text. It works everything out again from
+    scratch and tells you whether it stands up.
+  </p>
+  <textarea id="verifyIn" spellcheck="false" placeholder="Paste what the organiser sent you — before or after the draw…"></textarea>
+
+  <div class="row" style="margin-top:1rem;align-items:flex-end">
+    <div style="flex:2">
+      <label for="myName">Find my name (optional)</label>
+      <input type="text" id="myName" placeholder="Your name, as you entered it" spellcheck="false">
+    </div>
+  </div>
+
+  <p style="margin-top:.4rem"><button class="quiet" id="verify">Check it</button></p>
+  <div id="verifyOut" class="status"></div>
+</section>
+
+<footer>
+  <p style="margin:0 0 1.6rem;font-size:1rem;color:var(--ink)">
+    You type in the names. A number nobody can predict decides the winners.
+    Anyone can check it was done properly — even people who don't trust you.
+  </p>
+
+  <details style="margin-bottom:.9rem">
+    <summary style="cursor:pointer;font-weight:600;color:var(--ink)">Could I rig it?</summary>
+    <p style="margin:.6rem 0 0">
+      No. The names are locked in before the deciding number exists. Change one
+      afterwards and it stops matching, and anyone checking will see that.
+    </p>
+  </details>
+
+  <details style="margin-bottom:.9rem">
+    <summary style="cursor:pointer;font-weight:600;color:var(--ink)">Where does the number come from?</summary>
+    <p style="margin:.6rem 0 0">
+      A public network of computers that puts out a new number ten times a
+      second. You choose a moment a few minutes away. Whatever number comes up
+      then decides it. Nobody can know it early, because it hasn't happened yet.
+    </p>
+  </details>
+
+  <details style="margin-bottom:.9rem">
+    <summary style="cursor:pointer;font-weight:600;color:var(--ink)">How does someone check?</summary>
+    <p style="margin:.6rem 0 0">
+      They open the link you sent. It works the whole thing out again and says
+      whether the answer comes out the same. They don't have to take your word
+      for anything, or ours.
+    </p>
+  </details>
+
+  <details style="margin-bottom:.9rem">
+    <summary style="cursor:pointer;font-weight:600;color:var(--ink)">Is there a catch?</summary>
+    <p style="margin:.6rem 0 0">
+      The number is decided by about forty computers at once, and the draw uses
+      the one that comes out lowest. Somebody running one of those computers
+      could throw their answer away and try again — but it would only change the
+      result about once in forty attempts, and each attempt costs them real
+      money. Fine for a fete, a giveaway or a prize draw. We wouldn't use it to
+      give away a house.
+    </p>
+  </details>
+
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--ink)">Do I need an account, or to pay anything?</summary>
+    <p style="margin:.6rem 0 0">
+      No. Nothing to sign up for, nothing to install, nothing to pay. The
+      network is called Kaspa, and the small cost of recording your draw is
+      covered for you.
+    </p>
+  </details>
+</footer>
+
+</main>
+<script>
+'use strict';
+
+const enc = new TextEncoder();
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function cleanEntrants(raw) {
+  return raw.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+// The commitment binds the list, the count and the target together. Change any
+// one of them and the fingerprint changes, which is the entire guarantee.
+async function fingerprint(entrants, winners, targetDaa) {
+  return sha256Hex(`fairdraw/1\n${targetDaa}\n${winners}\n${entrants.join('\n')}`);
+}
+
+// Winners come from the block hash by repeated hashing — deterministic, so
+// anyone repeating these steps lands on the same people.
+async function pickWinners(entrants, count, blockHash) {
+  const pool = entrants.map((name, i) => ({ name, i }));
+  const chosen = [];
+  for (let round = 0; round < Math.min(count, pool.length); round++) {
+    const digest = await sha256Hex(`${blockHash}/${round}`);
+    // Use 52 bits — comfortably inside an exact integer.
+    const n = parseInt(digest.slice(0, 13), 16);
+    const idx = n % pool.length;
+    chosen.push(pool[idx].name);
+    pool.splice(idx, 1);            // no one wins twice
+  }
+  return chosen;
+}
+
+// ------------------------------------------------------------------- chain
+// Everything below is plain HTTP against the public Kaspa REST API. No node,
+// no wallet, no install. The API is database-backed, so the blocks stay
+// queryable long after the network itself has pruned them.
+
+function apiBase() {
+  return ($('api').value.trim() || 'https://api.kaspa.org').replace(/\/+$/, '');
+}
+
+async function getJson(path) {
+  let res;
+  try {
+    res = await fetch(apiBase() + path, { headers: { accept: 'application/json' } });
+  } catch (e) {
+    // A page opened straight from disk has no origin, and browsers refuse to
+    // let it call any website. Nothing to do with the API or the connection.
+    if (location.protocol === 'file:') {
+      throw new Error(
+        'Opened from a file, so the browser blocks all web requests. ' +
+        'Serve this page instead: in that folder run  npx serve  (or ' +
+        'python -m http.server) and open the address it prints.'
+      );
+    }
+    throw new Error(`could not reach the Kaspa API (${e.message}).`);
+  }
+  if (!res.ok) throw new Error(`the Kaspa API returned ${res.status} for ${path}`);
+  return res.json();
+}
+
+async function currentBlueScore() {
+  const d = await getJson('/info/virtual-chain-blue-score');
+  const n = Number(d?.blueScore);
+  if (!Number.isFinite(n)) throw new Error('the API did not return a blue score');
+  return n;
+}
+
+// The deciding number comes from a window of positions rather than one, and is
+// the lowest hash among every block in it. A wider window means more blocks
+// competing to be the lowest, so any single miner's block is unlikely to be the
+// one that decides — which is what makes discarding it pointless most of the
+// time.
+const WINDOW = 10;          // ten positions — about a second of activity
+
+async function blockHashesAt(blueScore) {
+  const blocks = await getJson(`/blocks-from-bluescore?blueScore=${blueScore}`);
+  if (!Array.isArray(blocks)) return [];
+  return blocks
+    .map((b) => b?.verboseData?.hash)
+    .filter((h) => typeof h === 'string' && /^[0-9a-f]{64}$/i.test(h))
+    .map((h) => h.toLowerCase());
+}
+
+// The lowest hash in the window wins, rather than hashing them all together.
+// That difference matters enormously: combining every hash means changing any
+// one of them re-rolls the whole result, so a miner who bins their own block
+// gets a fresh draw every time. Taking the minimum means their discard only
+// changes anything if theirs happened to be the lowest — roughly a 1-in-40
+// chance across a window this wide. Measured, not assumed.
+async function decidingSeed(startBlueScore) {
+  const scores = Array.from({ length: WINDOW }, (_, i) => startBlueScore + i);
+  const lists = await Promise.all(scores.map(blockHashesAt));
+  const all = lists.flat().sort();
+  if (all.length === 0) return null;
+  return { seed: all[0], blockCount: all.length };
+}
+
+// A QR code only helps if it will actually scan. Long links make dense codes
+// that phones struggle with, so past a certain size say so rather than show
+// something unusable. Generated here in the browser — the link carries every
+// entrant's name, so it must never be sent to an image service.
+const QR_MAX_CHARS = 1100;
+
+function renderQr(url) {
+  const wrap = $('qrWrap'), note = $('qrNote'), box = $('qr');
+  if (!wrap || !note || !box) return;
+  box.innerHTML = '';
+  wrap.classList.add('hidden');
+  note.classList.add('hidden');
+
+  if (typeof QRCode === 'undefined') {
+    note.textContent = 'QR code unavailable offline — send the link instead.';
+    note.classList.remove('hidden');
+    return;
+  }
+  if (url.length > QR_MAX_CHARS) {
+    note.textContent = 'Too many entrants for a scannable QR code — send the link instead.';
+    note.classList.remove('hidden');
+    return;
+  }
+  try {
+    new QRCode(box, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L });
+    wrap.classList.remove('hidden');
+  } catch {
+    note.textContent = 'Could not draw a QR code — send the link instead.';
+    note.classList.remove('hidden');
+  }
+}
+
+// Winners appearing all at once feels like a page load rather than a draw.
+// Shuffle through the names, slow down, land on each in turn.
+function revealWinners(listEl, winners, pool) {
+  if (!listEl) return Promise.resolve();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  listEl.innerHTML = '';
+
+  if (reduce || pool.length < 3) {
+    for (const w of winners) {
+      const li = document.createElement('li');
+      li.textContent = w;
+      listEl.appendChild(li);
+    }
+    return Promise.resolve();
+  }
+
+  return winners.reduce((chain, winner) => chain.then(() => new Promise((done) => {
+    const li = document.createElement('li');
+    li.style.opacity = '.55';
+    listEl.appendChild(li);
+
+    let delay = 55;
+    const tick = () => {
+      li.textContent = pool[(Math.random() * pool.length) | 0];
+      delay *= 1.18;
+      if (delay < 340) return setTimeout(tick, delay);
+      li.textContent = winner;
+      li.style.opacity = '1';
+      li.style.transition = 'transform .25s ease';
+      li.style.transform = 'scale(1.06)';
+      setTimeout(() => { li.style.transform = 'scale(1)'; done(); }, 260);
+    };
+    tick();
+  })), Promise.resolve());
+}
+
+// Confirms the commitment was recorded on chain BEFORE the deciding moment.
+// This is what separates an honest early commitment from one invented after
+// the fact — the arithmetic alone cannot tell them apart.
+async function checkAnchor(txid, fingerprintHex, targetBlueScore) {
+  if (!txid) return { ok: false, note: 'No public record was quoted, so the timing cannot be proved.' };
+  if (!/^[0-9a-f]{64}$/i.test(txid)) return { ok: false, note: 'The public record reference is not valid.' };
+
+  let tx;
+  try { tx = await getJson(`/transactions/${txid.toLowerCase()}`); }
+  catch (e) { return { ok: null, note: `Could not look up the public record (${e.message}).` }; }
+
+  if (tx?.is_accepted === false)
+    return { ok: false, note: 'That record was never accepted by the network.' };
+
+  let text = '';
+  try {
+    const hex = String(tx?.payload ?? '');
+    text = new TextDecoder().decode(Uint8Array.from(hex.match(/../g) || [], (b) => parseInt(b, 16)));
+  } catch { /* leave empty and fail below */ }
+
+  if (!text.includes(fingerprintHex))
+    return { ok: false, note: 'The public record does not carry this list\u2019s fingerprint.' };
+
+  const at = Number(tx?.accepting_block_blue_score);
+  if (!Number.isFinite(at))
+    return { ok: null, note: 'The record is on the chain but its position is not confirmed yet.' };
+
+  if (at >= targetBlueScore)
+    return { ok: false, note: `The list was recorded at ${at.toLocaleString()}, which is AFTER the draw was decided at ${targetBlueScore.toLocaleString()}. It could have been written to suit the result.` };
+
+  return { ok: true, at, note: `Recorded ${(targetBlueScore - at).toLocaleString()} blocks before the draw was decided.` };
+}
+
+// -------------------------------------------------------------------- state
+
+let draw = null;   // { entrants, winners, targetDaa, seal }
+
+const $ = (id) => document.getElementById(id);
+
+if (location.protocol === 'file:') $('fileWarn').classList.remove('hidden');
+
+// Arriving by link means you are an entrant, not the organiser. Show what you
+// came for and put the setup form away.
+function showOrganiserView() {
+  $('guest').classList.add('hidden');
+  for (const id of ['setupCard', 'mainTitle', 'stepsBlock', 'versusBlock']) $(id)?.classList.remove('hidden');
+  history.replaceState(null, '', location.pathname);
+}
+
+async function showGuestView(d) {
+  for (const id of ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock']) $(id)?.classList.add('hidden');
+  $('guest').classList.remove('hidden');
+
+  const ol = $('guestList');
+  ol.innerHTML = '';
+  for (const n of d.entrants) {
+    const li = document.createElement('li');
+    li.textContent = n;
+    ol.appendChild(li);
+  }
+  $('guestCount').textContent = `${d.entrants.length} entries`;
+
+  const tally = new Map();
+  for (const n of d.entrants) tally.set(n, (tally.get(n) ?? 0) + 1);
+  const repeats = [...tally].filter(([, c]) => c > 1);
+
+  $('guestBody').innerHTML = `<p style="margin:0 0 1rem;color:var(--muted)">Checking it against the chain…</p>`;
+
+  const seal = await fingerprint(d.entrants, d.winners, d.targetDaa);
+  const anchor = await checkAnchor(d.anchorTx, seal, d.targetDaa);
+
+  let now = null;
+  try { now = await currentBlueScore(); } catch { /* offline, say so below */ }
+
+  const drawn = now !== null && now >= d.targetDaa + SETTLE_BLOCKS;
+  let winnersHtml = '';
+  let drawnWinners = null;
+
+  if (drawn) {
+    const deciding = await decidingSeed(d.targetDaa);
+    if (deciding) {
+      drawnWinners = await pickWinners(d.entrants, d.winners, deciding.seed);
+      winnersHtml = `<div class="seal"><h3>Winners</h3><ol class="winners" id="guestWinners"></ol></div>`;
+    }
+  } else if (now !== null) {
+    const left = Math.max(0, d.targetDaa + SETTLE_BLOCKS - now);
+    const mins = Math.ceil(left / BLOCKS_PER_MINUTE);
+    winnersHtml = `<p style="margin:0 0 1rem"><strong>Not drawn yet</strong> — about ${
+      left < BLOCKS_PER_MINUTE ? `${Math.ceil(left / 10)} seconds` : `${mins} minute${mins > 1 ? 's' : ''}`
+    } to go. Come back to this link and the winners will appear here.</p>`;
+  }
+
+  $('guestHead').textContent = drawn ? 'The result' : 'You have been entered into a draw';
+  $('guestBody').innerHTML = winnersHtml + `
+    <div style="margin-top:.4rem">${
+      anchor.ok === true  ? '<span class="good">\u2713</span> This draw was locked in and recorded publicly before it was decided, so it cannot have been fixed.'
+    : anchor.ok === false ? `<span class="bad">\u2717 ${anchor.note}</span>`
+    : '<span style="color:var(--muted)">Could not reach the chain to check this. Try again shortly.</span>'}</div>
+    ${repeats.length ? `<div style="margin-top:.5rem;font-size:.86rem;color:var(--muted)">Entered more than once: ${repeats.map(([n, c]) => `${n} \u00d7 ${c}`).join(' \u00b7 ')}</div>` : ''}
+    <div style="margin-top:.5rem;font-size:.86rem;color:var(--muted)">${d.entrants.length} entries \u00b7 ${d.winners} winner${d.winners > 1 ? 's' : ''}</div>`;
+
+  if (drawnWinners) await revealWinners($('guestWinners'), drawnWinners, d.entrants);
+
+  $('guestName').addEventListener('input', () => {
+    const q = $('guestName').value.trim().toLowerCase();
+    if (!q) { $('guestFound').textContent = ''; return; }
+    const at = [];
+    d.entrants.forEach((n, i) => { if (n.toLowerCase() === q) at.push(i + 1); });
+    $('guestFound').innerHTML = at.length
+      ? `<span class="good">\u2713</span> You're in — entry ${at.join(' and ')}${at.length > 1 ? ', so you have more than one chance' : ''}.`
+      : `<span class="bad">\u2717 That name isn't in this list.</span> Check the spelling, then ask whoever sent you the link.`;
+  });
+}
+
+$('guestOrganise').addEventListener('click', showOrganiserView);
+
+const fragment = (location.hash.match(/#draw=(.+)$/) || [])[1];
+if (fragment) {
+  const d = decodeDraw(fragment);
+  if (d) showGuestView(d);
+  else $('setupStatus').innerHTML = '<span class="bad">That link is damaged. Ask for it again.</span>';
+}
+const BLOCKS_PER_MINUTE = 600;
+
+// Several blocks can share a blue score, and the deciding block is the one with
+// the lowest hash among them. That answer is only stable once every block at
+// that position has been indexed — ask too early and you get the lowest of a
+// partial set, which is a different block. So wait for the chain to move well
+// past the target before reading it.
+const SETTLE_BLOCKS = 1200;
+
+// The service that records commitments on chain. It pays the fee so nobody
+// running a draw needs a wallet. On localhost we assume anchor-server.mjs is
+// running alongside; deployed, it is a Netlify function.
+// The whole draw travels in the link's fragment, so it never touches a server.
+function encodeDraw(d) {
+  const packed = JSON.stringify({ n: d.entrants, w: d.winners, t: d.targetDaa, a: d.anchorTx });
+  return btoa(unescape(encodeURIComponent(packed))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeDraw(fragment) {
+  try {
+    const b64 = fragment.replace(/-/g, '+').replace(/_/g, '/');
+    const packed = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if (!Array.isArray(packed.n) || !packed.t) return null;
+    return { entrants: packed.n, winners: packed.w || 1, targetDaa: Number(packed.t), anchorTx: packed.a || null };
+  } catch { return null; }
+}
+
+function shareLink(d) {
+  return `${location.origin}${location.pathname}#draw=${encodeDraw(d)}`;
+}
+
+const ANCHOR_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? 'http://127.0.0.1:8787/anchor'
+  : '/.netlify/functions/anchor';
+
+// ---------------------------------------------------------------- step one
+
+$('commit').addEventListener('click', async () => {
+  try {
+    await runCommit();
+  } catch (e) {
+    console.error(e);
+    $('setupStatus').innerHTML =
+      `<span class="bad">Something went wrong after the commitment: ${e.message}</span><br>` +
+      `If a transaction id appeared in the anchor window, that part worked — this is a fault in the page.`;
+  }
+});
+
+async function runCommit() {
+  const entrants = cleanEntrants($('entrants').value);
+  const winners = parseInt($('winners').value, 10) || 1;
+  const minutes = parseInt($('delay').value, 10);
+
+  if (entrants.length < 2) { $('setupStatus').innerHTML = '<span class="bad">Add at least two names.</span>'; return; }
+  if (winners > entrants.length) { $('setupStatus').innerHTML = '<span class="bad">More winners than entrants.</span>'; return; }
+
+  $('setupStatus').textContent = 'Reading the chain to fix the moment…';
+  let nowScore;
+  try {
+    nowScore = await currentBlueScore();
+  } catch (e) {
+    $('setupStatus').innerHTML = `<span class="bad">${e.message}</span>`;
+    return;
+  }
+
+  const targetDaa = nowScore + minutes * BLOCKS_PER_MINUTE;
+  const seal = await fingerprint(entrants, winners, targetDaa);
+
+  // Record the fingerprint on the chain before the deciding block exists.
+  // Without this the maths cannot tell an honest early commitment from one
+  // invented afterwards, so it is not optional.
+  $('setupStatus').textContent = 'Recording the commitment on the chain…';
+  let anchor;
+  try {
+    const res = await fetch(ANCHOR_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fingerprint: seal, targetBlueScore: targetDaa }),
+      signal: AbortSignal.timeout(45000),
+    });
+    anchor = await res.json();
+    if (!res.ok || !anchor.txid) throw new Error(anchor.error || `anchor service returned ${res.status}`);
+
+    // If the commitment landed at or past the deciding position, it proves
+    // nothing about timing — the draw would be unverifiable. Better to fail
+    // here than hand over a result nobody can check.
+    const landed = Number(anchor.anchoredAtBlueScore);
+    if (Number.isFinite(landed) && landed >= targetDaa - 60) {
+      throw new Error(
+        `the commitment landed at ${landed.toLocaleString()}, too close to the deciding ` +
+        `position ${targetDaa.toLocaleString()}. Choose a longer delay and try again.`
+      );
+    }
+    anchor.marginBlocks = Number.isFinite(landed) ? targetDaa - landed : null;
+  } catch (e) {
+    const why = e.name === 'TimeoutError'
+      ? 'the recording service did not answer within 45 seconds'
+      : e.name === 'AbortError' ? 'the request was cut short'
+      : e.message;
+    $('setupStatus').innerHTML =
+      `<span class="bad">Could not record the commitment: ${why}</span><br>` +
+      `Without it the draw cannot be proved fair, so nothing has been locked in. Try again.`;
+    return;
+  }
+
+  draw = { entrants, winners, targetDaa, seal, anchorTx: anchor.txid };
+
+  $('sealCount').textContent = `${entrants.length} names`;
+  $('sealWinners').textContent = winners;
+  const when = new Date(Date.now() + minutes * 60000);
+  $('sealTarget').textContent =
+    when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+    ` — about ${minutes} minute${minutes > 1 ? 's' : ''} from now`;
+  $('sealHash').textContent = seal;
+  $('sealAnchor').textContent = anchor.txid +
+    (anchor.marginBlocks ? `  (${anchor.marginBlocks.toLocaleString()} blocks before the draw)` : '');
+
+  // Show every name, numbered, so anyone can find themselves — and count
+  // repeats, because a fingerprint hides stuffing just as well as it hides
+  // an honest list.
+  const ol = $('publicList');
+  ol.innerHTML = '';
+  for (const name of entrants) {
+    const li = document.createElement('li');
+    li.textContent = name;
+    ol.appendChild(li);
+  }
+  $('listCount').textContent = `${entrants.length} entries`;
+
+  const tally = new Map();
+  for (const n of entrants) tally.set(n, (tally.get(n) ?? 0) + 1);
+  const repeats = [...tally].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]);
+  if (repeats.length) {
+    $('dupeList').textContent = repeats.map(([n, c]) => `${n} × ${c}`).join(' · ');
+    $('dupeBox').classList.remove('hidden');
+  } else {
+    $('dupeBox').classList.add('hidden');
+  }
+
+  $('shareUrl').value = shareLink(draw);
+  renderQr(shareLink(draw));
+  $('sealBox').classList.remove('hidden');
+  $('drawCard').classList.remove('hidden');
+  $('setupStatus').textContent = 'Locked. Share the link now, before the draw happens.';
+}
+
+$('copyLink').addEventListener('click', () => {
+  if (!draw) return;
+  $('shareUrl').select();
+  navigator.clipboard?.writeText(shareLink(draw));
+  $('setupStatus').textContent = 'Link copied. Send it round before the draw happens.';
+});
+
+$('copySeal').addEventListener('click', () => {
+  if (!draw) return;
+  const text =
+    `Fair Draw — committed in advance\n` +
+    `Winners: ${draw.winners}\n` +
+    `Chain position: ${draw.targetDaa}\n` +
+    `Fingerprint: ${draw.seal}\n` +
+    `Anchor: ${draw.anchorTx}\n` +
+    `---\n` +
+    `Entrants (${draw.entrants.length}), in the order committed:\n` +
+    draw.entrants.join('\n') + '\n';
+  navigator.clipboard?.writeText(text);
+  $('setupStatus').textContent = 'Copied — names included. Send it round before the draw.';
+});
+
+// ---------------------------------------------------------------- step two
+
+$('draw').addEventListener('click', async () => {
+  if (!draw) return;
+  $('drawStatus').textContent = 'Checking whether the moment has arrived…';
+
+  let nowScore, deciding;
+  try {
+    nowScore = await currentBlueScore();
+    if (nowScore < draw.targetDaa) {
+      const left = draw.targetDaa - nowScore;
+      const mins = Math.ceil(left / BLOCKS_PER_MINUTE);
+      $('drawStatus').textContent = left < BLOCKS_PER_MINUTE
+        ? `Not yet — about ${Math.ceil(left / 10)} seconds to go.`
+        : `Not yet — about ${mins} minute${mins > 1 ? 's' : ''} to go.`;
+      return;
+    }
+    if (nowScore < draw.targetDaa + SETTLE_BLOCKS) {
+      const left = draw.targetDaa + SETTLE_BLOCKS - nowScore;
+      $('drawStatus').textContent =
+        `The moment has passed — now letting the deciding block settle so the result ` +
+        `is the same for everyone who checks it. About ${Math.ceil(left / BLOCKS_PER_MINUTE)} more minute(s).`;
+      return;
+    }
+    deciding = await decidingSeed(draw.targetDaa);
+  } catch (e) {
+    $('drawStatus').innerHTML = `<span class="bad">${e.message}</span>`;
+    return;
+  }
+
+  if (!deciding) {
+    $('drawStatus').innerHTML = '<span class="bad">No blocks recorded at that moment yet.</span> Wait a minute and try again.';
+    return;
+  }
+
+  const winners = await pickWinners(draw.entrants, draw.winners, deciding.seed);
+  $('resultBox').classList.remove('hidden');
+  $('drawStatus').textContent = 'Drawing…';
+  await revealWinners($('winnerList'), winners, draw.entrants);
+  $('blockHash').textContent = deciding.seed;
+  $('blockDaa').textContent = `combined from ${deciding.blockCount} blocks across ${WINDOW} positions`;
+  $('resultSeal').textContent = draw.seal;
+  $('resultBox').classList.remove('hidden');
+  $('drawStatus').textContent = 'Done. Send the result to everyone so they can check it.';
+
+  draw.blockHash = deciding.seed;
+  draw.drawnWinners = winners;
+});
+
+$('copyResult').addEventListener('click', () => {
+  if (!draw?.blockHash) return;
+  const text =
+    `Fair Draw — result\n` +
+    `Fingerprint: ${draw.seal}\n` +
+    `Anchor: ${draw.anchorTx}\n` +
+    `Chain position: ${draw.targetDaa}\n` +
+    `Deciding block: ${draw.blockHash}\n` +
+    `Winners: ${draw.drawnWinners.join(', ')}\n` +
+    `---\n` +
+    `Entrants (${draw.entrants.length}), in the order committed:\n` +
+    draw.entrants.join('\n') + '\n';
+  navigator.clipboard?.writeText(text);
+  $('drawStatus').textContent = 'Copied.';
+});
+
+// -------------------------------------------------------------- step three
+
+$('verify').addEventListener('click', async () => {
+  const raw = $('verifyIn').value;
+  const out = $('verifyOut');
+
+  const grab = (label) => (raw.match(new RegExp(`${label}:\\s*(.+)`)) || [])[1]?.trim();
+  const seal = grab('Fingerprint');
+  const target = grab('Chain position');
+  const block = grab('Deciding block');
+  const claimed = grab('Winners');
+  const listPart = raw.split('---')[1];
+
+  if (!seal || !target || !listPart) {
+    out.innerHTML = '<span class="bad">That does not look complete. Paste the whole message, including the names after the dashed line.</span>';
+    return;
+  }
+
+  // Drop the "Entrants (n), in the order committed:" header if it is present;
+  // leaving it in would count it as a person and break every check.
+  const lines = cleanEntrants(listPart);
+  if (lines.length && /^entrants\b.*:$/i.test(lines[0])) lines.shift();
+  const entrants = lines;
+  const myName = $('myName').value.trim();
+
+  // Where the name search goes: an entrant mostly wants one question answered,
+  // which is whether they are actually in the draw at all.
+  let mine = '';
+  if (myName) {
+    const positions = [];
+    entrants.forEach((n, i) => {
+      if (n.toLowerCase() === myName.toLowerCase()) positions.push(i + 1);
+    });
+    mine = positions.length
+      ? `<div style="margin-top:.8rem"><span class="good">\u2713</span> <strong>${myName}</strong> is in the draw` +
+        (positions.length > 1
+          ? ` <strong>${positions.length} times</strong> (entries ${positions.join(', ')}).</div>`
+          : ` at entry ${positions[0]}.</div>`)
+      : `<div style="margin-top:.8rem"><span class="bad">\u2717 ${myName} is not in this list.</span> ` +
+        `Check the spelling, then ask the organiser.</div>`;
+  }
+
+  // A commitment shared before the draw has no block or winners yet. That is
+  // the most useful moment to check, so handle it rather than rejecting it.
+  const isResult = Boolean(block && claimed);
+  const winnerCount = isResult ? claimed.split(',').length
+                               : parseInt((grab('Winners') || '1'), 10) || 1;
+
+  const recomputedSeal = await fingerprint(entrants, winnerCount, Number(target));
+  const sealOk = recomputedSeal === seal;
+
+  const tally = new Map();
+  for (const n of entrants) tally.set(n, (tally.get(n) ?? 0) + 1);
+  const repeats = [...tally].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]);
+  const dupes = repeats.length
+    ? `<div style="margin-top:.6rem;font-size:.85rem">Appearing more than once: ${repeats.map(([n, c]) => `${n} \u00d7 ${c}`).join(' \u00b7 ')}</div>`
+    : '';
+
+  const anchorTx = grab('Anchor');
+  const anchor = await checkAnchor(anchorTx, seal, Number(target));
+
+  const anchorLine = `<div style="margin-top:.35rem">${
+      anchor.ok === true  ? '<span class="good">\u2713</span> The commitment was recorded on the chain before the draw was decided.'
+    : anchor.ok === false ? `<span class="bad">\u2717 ${anchor.note}</span>`
+    : '<span style="color:var(--muted)">? The anchor could not be confirmed.</span>'}</div>` +
+    (anchor.ok === true && anchor.note ? `<div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">${anchor.note}</div>` : '') +
+    (anchor.ok === null && anchor.note ? `<div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">${anchor.note}</div>` : '');
+
+  if (!isResult) {
+    out.innerHTML = `
+      <div style="margin-top:.6rem">
+        ${anchorLine}
+        <div style="margin-top:.35rem">${sealOk
+          ? '<span class="good">\u2713</span> These names match the fingerprint. The list is fixed — the organiser cannot change it now without everyone noticing.'
+          : '<span class="bad">\u2717 These names do NOT match the fingerprint.</span>'}</div>
+        ${mine}
+        <div class="working" style="margin-top:1rem">
+          <dl>
+            <dt>Entrants</dt><dd>${entrants.length}</dd>
+            <dt>Winners to draw</dt><dd>${winnerCount}</dd>
+            <dt>Draw happens at</dt><dd>chain position ${Number(target).toLocaleString()}</dd>
+          </dl>
+          ${dupes}
+        </div>
+      </div>`;
+    return;
+  }
+
+  const recomputedWinners = await pickWinners(entrants, winnerCount, block);
+  const winnersOk = recomputedWinners.join(', ') === claimed;
+
+  // The block hash is the one thing the message asks you to take on trust, so
+  // go and look it up. Without this an organiser could wait, see which nearby
+  // block favoured them, and name that one instead of the committed position.
+  let blockOk = null, blockNote = '';
+  try {
+    const real = await decidingSeed(Number(target));
+    if (!real) {
+      blockNote = 'No blocks are recorded at that moment, so this could not be confirmed.';
+    } else if (real.seed === block.toLowerCase()) {
+      blockOk = true;
+      blockNote = `Rebuilt from ${real.blockCount} blocks and it matches.`;
+    } else {
+      blockOk = false;
+      blockNote = `Rebuilding it from the chain gives ${real.seed}, not the number quoted. ` +
+        `That usually means the draw was run before every block had been recorded, rather than ` +
+        `anything dishonest — but the result cannot be reproduced, so it cannot be accepted.`;
+    }
+  } catch (e) {
+    blockNote = `Could not reach the chain to confirm the number (${e.message}).`;
+  }
+
+  out.innerHTML = `
+    <div style="margin-top:.6rem">
+      <div>${sealOk ? '<span class="good">\u2713</span> The list matches the fingerprint published beforehand.'
+                    : '<span class="bad">\u2717 The list does NOT match the fingerprint \u2014 it changed after the commitment.</span>'}</div>
+      <div style="margin-top:.35rem">${winnersOk ? '<span class="good">\u2713</span> The winners follow from the deciding block.'
+                    : '<span class="bad">\u2717 The winners do NOT follow from that block.</span>'}</div>
+      <div style="margin-top:.35rem">${
+        blockOk === true  ? '<span class="good">\u2713</span> The deciding number really does come from that moment on the chain.'
+      : blockOk === false ? '<span class="bad">\u2717 The deciding number does NOT match what the chain says.</span>'
+      : '<span style="color:var(--muted)">? The deciding block could not be confirmed against the chain.</span>'}</div>
+      ${blockNote ? `<div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">${blockNote}</div>` : ''}
+      ${anchorLine}
+      ${mine}
+      <div style="margin-top:.8rem" class="${sealOk && winnersOk && blockOk === true && anchor.ok === true ? 'good' : 'bad'}">
+        ${sealOk && winnersOk && blockOk === true && anchor.ok === true
+          ? 'This draw holds up. Everything checks out against the chain.'
+          : (blockOk === null || anchor.ok === null) && sealOk && winnersOk
+            ? 'The maths checks out, but the chain could not be reached to confirm it. Try again shortly.'
+            : 'This draw does not hold up.'}
+      </div>
+      <div class="working" style="margin-top:1rem">
+        <dl>
+          <dt>Recomputed winners</dt><dd>${recomputedWinners.join(', ')}</dd>
+          <dt>Claimed winners</dt><dd>${claimed}</dd>
+          <dt>Entrants read</dt><dd>${entrants.length}</dd>
+        </dl>
+        ${dupes}
+      </div>
+    </div>`;
+});
+</script>
+</body>
+</html>

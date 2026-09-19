@@ -1,0 +1,19 @@
+# NEVER commit these
+.env
+.env.*
+*.key
+*secret*
+vault.json
+anchor-key*
+
+# The Kaspa SDK is a 12MB download, not source. Fetch it from
+# github.com/kaspanet/rusty-kaspa/releases and place it as described in README.
+kaspa/
+netlify/functions/kaspa/
+kaspa-wasm32-sdk/
+
+node_modules/
+.netlify/
+scorebot-state.json
+.DS_Store
+Thumbs.db

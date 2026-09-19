@@ -1,0 +1,10 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# The Kaspa SDK ships a .wasm file that kaspa.js loads from disk at runtime.
+# Bundling would move it and break the path, so ship the function as-is and
+# tell Netlify to include the folder.
+[functions]
+  node_bundler = "none"
+  included_files = ["netlify/functions/kaspa/**"]

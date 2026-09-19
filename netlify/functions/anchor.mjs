@@ -52,8 +52,30 @@ const json = (status, body) => ({
   body: JSON.stringify(body),
 });
 
+// Netlify flattens the function to /var/task/anchor.mjs but keeps included
+// files at their path relative to the repo root, so the SDK does not end up
+// beside the function. Try every location it could plausibly be, and say which
+// were tried if none work.
+const SDK_PATHS = [
+  './kaspa/kaspa.js',
+  './netlify/functions/kaspa/kaspa.js',
+  '/var/task/netlify/functions/kaspa/kaspa.js',
+  '/var/task/kaspa/kaspa.js',
+];
+
 let sdkCache = null;
-const loadSdk = () => (sdkCache ??= require('./kaspa/kaspa.js'));
+function loadSdk() {
+  if (sdkCache) return sdkCache;
+  const tried = [];
+  for (const rel of SDK_PATHS) {
+    try { return (sdkCache = require(rel)); }
+    catch (e) {
+      tried.push(`${rel} (${e.code || e.message})`);
+      if (e.code !== 'MODULE_NOT_FOUND') throw e;
+    }
+  }
+  throw new Error(`Kaspa SDK not found. Tried: ${tried.join(' | ')}`);
+}
 
 function withTimeout(promise, ms, what) {
   return Promise.race([
@@ -124,7 +146,10 @@ export async function handler(event) {
     return json(400, { error: 'fingerprint must be 64 hex characters' });
 
   // --- anchor ---------------------------------------------------------------
-  const sdk = loadSdk();
+  let sdk;
+  try { sdk = loadSdk(); }
+  catch (e) { return json(500, { error: e.message }); }
+
   const privateKey = new sdk.PrivateKey(PRIVATE_KEY);
   const address = privateKey.toKeypair().toAddress(NETWORK).toString();
 

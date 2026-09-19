@@ -2,9 +2,13 @@
   publish = "."
   functions = "netlify/functions"
 
-# The Kaspa SDK ships a .wasm file that kaspa.js loads from disk at runtime.
-# Bundling would move it and break the path, so ship the function as-is and
-# tell Netlify to include the folder.
+# The Kaspa SDK loads an 11MB .wasm from disk at runtime. Bundling relocates it
+# and breaks that path, so ship the function unbundled and include the folder
+# explicitly. Paths in included_files are relative to the repo root, which is
+# why the function looks for the SDK in several places.
 [functions]
   node_bundler = "none"
-  included_files = ["netlify/functions/kaspa/**"]
+  included_files = [
+    "netlify/functions/kaspa/**",
+    "kaspa/**"
+  ]

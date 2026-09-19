@@ -390,16 +390,67 @@
   <details>
     <summary style="cursor:pointer;font-weight:600;color:var(--ink)">Do I need an account, or to pay anything?</summary>
     <p style="margin:.6rem 0 0">
-      No. Nothing to sign up for, nothing to install, nothing to pay. The
-      network is called Kaspa, and the small cost of recording your draw is
-      covered for you.
+      No. Nothing to sign up for, nothing to install, nothing to pay.
     </p>
   </details>
+
+  <div style="margin-top:2.4rem;padding-top:1.6rem;border-top:1px solid var(--line)">
+    <p style="margin:0 0 .7rem;font-weight:600;color:var(--ink)">Built on Kaspa</p>
+    <p style="margin:0 0 .7rem">
+      This site doesn't own the part that makes it trustworthy. The
+      unpredictable number, the public record, and the fact a stranger can check
+      a draw long afterwards — none of that is ours. It comes from
+      <a href="https://kaspa.org" style="color:var(--prize)">Kaspa</a>, a public
+      network run by thousands of people around the world who were not asked to
+      and are not paid by us.
+    </p>
+    <p style="margin:0 0 .7rem">
+      The data this page reads comes from a free public service maintained by
+      volunteers. Recording a draw costs a twentieth of a cent, and we cover it.
+      Everything expensive here was already there.
+    </p>
+    <p style="margin:0">
+      If you have ever wondered what this technology is actually <em>for</em>,
+      beyond people arguing about prices, this site is one small answer to that
+      question. Worth ten minutes of curiosity if you have them.
+    </p>
+  </div>
+
+  <div style="margin-top:2rem;padding:1.3rem 1.4rem;background:var(--card);border:1px solid var(--line);border-radius:10px">
+    <p style="margin:0 0 .7rem;font-weight:600;color:var(--ink)">Keeping it free</p>
+    <p style="margin:0 0 .7rem">
+      Every draw costs about a twentieth of a cent to record. That is paid from a
+      single wallet, and when it runs dry the site pauses rather than asking
+      anyone for anything.
+    </p>
+    <p style="margin:0 0 .7rem">
+      If you would like to top it up, you are very welcome to. You are equally
+      welcome not to — this is not a business and there is nothing behind a
+      paywall.
+    </p>
+    <p style="margin:0 0 .9rem">
+      <span style="font-weight:600;color:var(--ink)">Why you can check where it goes:</span>
+      the address below is the one the site spends from, and every payment into
+      and out of it is public and permanent. If a single coin ever left it for
+      anywhere other than recording a draw, that would be visible to anyone,
+      forever. You do not have to take our word for it — look.
+    </p>
+    <p style="margin:0">
+      <code id="donateAddr" style="font-size:.78rem"></code><br>
+      <a id="donateLink" href="#" target="_blank" rel="noopener"
+         style="color:var(--prize);font-size:.85rem">See everything this wallet has ever done</a>
+    </p>
+  </div>
 </footer>
 
 </main>
 <script>
 'use strict';
+
+// The wallet the site spends from. Published so anyone can audit it.
+// Declared first: `const` is not hoisted, so anything reading it before this
+// point throws "cannot access before initialization".
+const DONATE_ADDRESS = 'kaspa:qpgaqahewrjprk2svjd3gdtjlqn3pqwqtvtntmwxtuk4wlnu8n4t2yatnd6r9';
 
 const enc = new TextEncoder();
 
@@ -609,6 +660,11 @@ const $ = (id) => document.getElementById(id);
 
 if (location.protocol === 'file:') $('fileWarn').classList.remove('hidden');
 
+if ($('donateAddr')) {
+  $('donateAddr').textContent = DONATE_ADDRESS;
+  $('donateLink').href = `https://kaspa.stream/address/${DONATE_ADDRESS}`;
+}
+
 // Arriving by link means you are an entrant, not the organiser. Show what you
 // came for and put the setup form away.
 function showOrganiserView() {
@@ -804,8 +860,10 @@ async function runCommit() {
     when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
     ` — about ${minutes} minute${minutes > 1 ? 's' : ''} from now`;
   $('sealHash').textContent = seal;
-  $('sealAnchor').textContent = anchor.txid +
-    (anchor.marginBlocks ? `  (${anchor.marginBlocks.toLocaleString()} blocks before the draw)` : '');
+  $('sealAnchor').innerHTML =
+    `<a href="https://kaspa.stream/transaction/${anchor.txid}" target="_blank" rel="noopener" ` +
+    `style="color:var(--prize)">${anchor.txid}</a>` +
+    (anchor.marginBlocks ? ` <span style="color:var(--muted)">(${anchor.marginBlocks.toLocaleString()} blocks before the draw)</span>` : '');
 
   // Show every name, numbered, so anyone can find themselves — and count
   // repeats, because a fingerprint hides stuffing just as well as it hides

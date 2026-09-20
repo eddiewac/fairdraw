@@ -804,6 +804,7 @@ function shareLink(d) {
   return `${location.origin}${location.pathname}#draw=${encodeDraw(d)}`;
 }
 
+// Locally, the server you run yourself. Deployed, the Netlify function.
 const ANCHOR_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? 'http://127.0.0.1:8787/anchor'
   : '/.netlify/functions/anchor';

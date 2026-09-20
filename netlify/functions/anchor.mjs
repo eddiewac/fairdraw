@@ -158,19 +158,17 @@ export async function handler(event) {
   // --- input ----------------------------------------------------------------
   if ((event.body?.length ?? 0) > 4096) return json(413, { error: 'body too large' });
 
-  let body;
-  try { body = JSON.parse(event.body || '{}'); }
-  catch { return json(400, { error: 'body must be JSON' }); }
+  let fingerprint, listHash;
+  try {
+    const body = JSON.parse(event.body || '{}');
+    fingerprint = String(body.fingerprint || '').toLowerCase();
+    // A second hash covering the names alone. Every attempt at the same raffle
+    // carries it, which is what makes repeat draws countable afterwards.
+    listHash = String(body.listHash || '').toLowerCase();
+  } catch { return json(400, { error: 'body must be JSON' }); }
 
-  let fingerprint;
-  try { fingerprint = String(body.fingerprint || '').toLowerCase(); }
-  catch { return json(400, { error: 'body must be JSON' }); }
   if (!/^[0-9a-f]{64}$/.test(fingerprint))
     return json(400, { error: 'fingerprint must be 64 hex characters' });
-
-  // A second hash covering the names alone. Every attempt at the same raffle
-  // carries it, which is what makes repeat draws countable afterwards.
-  const listHash = String(body.listHash || '').toLowerCase();
   if (listHash && !/^[0-9a-f]{64}$/.test(listHash))
     return json(400, { error: 'listHash must be 64 hex characters' });
 

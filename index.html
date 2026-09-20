@@ -480,19 +480,27 @@ async function listFingerprint(entrants) {
 
 // How many times has this exact set of names been committed by the service?
 async function countAttempts(listHash) {
+  // The address contains a colon. Some layers mangle it percent-encoded, so
+  // send it raw — FastAPI matches the path either way.
   const txs = await getJson(
-    `/addresses/${encodeURIComponent(DONATE_ADDRESS)}/full-transactions-page?limit=500`);
-  if (!Array.isArray(txs)) return null;
+    `/addresses/${DONATE_ADDRESS}/full-transactions-page?limit=500`);
+  if (!Array.isArray(txs)) throw new Error('history lookup did not return a list');
+  if (txs.length === 0) throw new Error('the service wallet has no recorded history yet');
 
-  let n = 0;
+  let withPayload = 0, n = 0;
   for (const tx of txs) {
     let text = '';
     try {
       const hex = String(tx?.payload ?? '');
       text = new TextDecoder().decode(Uint8Array.from(hex.match(/../g) || [], (b) => parseInt(b, 16)));
     } catch { continue; }
+    if (text.startsWith('fairdraw:1:')) withPayload++;
     if (text.startsWith('fairdraw:1:') && text.includes(listHash)) n++;
   }
+  if (withPayload === 0)
+    throw new Error(
+      `read ${txs.length} transactions from ${DONATE_ADDRESS.slice(0, 22)}… but none were draw ` +
+      `records — the address the page checks is probably not the wallet that signs them`);
   return n;
 }
 
@@ -1074,10 +1082,14 @@ $('verify').addEventListener('click', async () => {
   // Passing every check still leaves one gap: an organiser can run the same
   // draw repeatedly and share only the result they liked. Every attempt is
   // recorded publicly though, so count them and say so plainly.
-  let attempts = null;
-  try { attempts = await countAttempts(await listFingerprint(entrants)); } catch { /* offline */ }
+  let attempts = null, attemptsProblem = '';
+  try {
+    attempts = await countAttempts(await listFingerprint(entrants));
+    if (attempts === null) attemptsProblem = 'the history lookup returned nothing usable';
+  } catch (e) { attemptsProblem = e.message; }
 
-  const attemptsLine = attempts === null ? ''
+  const attemptsLine = attempts === null
+    ? `<div style="margin-top:.35rem;font-size:.84rem;color:var(--muted)">Could not check for repeat draws (${attemptsProblem}).</div>`
     : attempts <= 1
       ? `<div style="margin-top:.35rem"><span class="good">\u2713</span> This is the only draw ever run with this exact list of names.</div>`
       : `<div style="margin-top:.35rem"><span class="bad">\u26a0</span> <strong>This same list of names has been drawn ${attempts} times.</strong>

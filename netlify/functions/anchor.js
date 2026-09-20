@@ -158,8 +158,12 @@ export async function handler(event) {
   // --- input ----------------------------------------------------------------
   if ((event.body?.length ?? 0) > 4096) return json(413, { error: 'body too large' });
 
+  let body;
+  try { body = JSON.parse(event.body || '{}'); }
+  catch { return json(400, { error: 'body must be JSON' }); }
+
   let fingerprint;
-  try { fingerprint = String(JSON.parse(event.body || '{}').fingerprint || '').toLowerCase(); }
+  try { fingerprint = String(body.fingerprint || '').toLowerCase(); }
   catch { return json(400, { error: 'body must be JSON' }); }
   if (!/^[0-9a-f]{64}$/.test(fingerprint))
     return json(400, { error: 'fingerprint must be 64 hex characters' });

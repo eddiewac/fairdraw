@@ -130,7 +130,7 @@ async function warmUp() {
   }
 }
 
-async function anchor(fingerprint) {
+async function anchor(fingerprint, listHash) {
   const rpc = await getConnection();
   try {
     process.stdout.write('  checking the wallet… ');
@@ -145,7 +145,7 @@ async function anchor(fingerprint) {
       outputs: [{ address, amount: sdk.kaspaToSompi('0.2') }],
       changeAddress: address,
       priorityFee: 0n,
-      payload: new TextEncoder().encode(PAYLOAD_PREFIX + fingerprint),
+      payload: new TextEncoder().encode(PAYLOAD_PREFIX + fingerprint + (listHash ? ':' + listHash : '')),
       networkId: NETWORK,
     });
 
@@ -182,16 +182,21 @@ createServer(async (req, res) => {
     if (raw.length > 4096) return send(res, 413, { error: 'body too large' });
   }
 
-  let fingerprint;
-  try { fingerprint = String(JSON.parse(raw).fingerprint || '').toLowerCase(); }
-  catch { return send(res, 400, { error: 'body must be JSON' }); }
+  let fingerprint, listHash;
+  try {
+    const body = JSON.parse(raw);
+    fingerprint = String(body.fingerprint || '').toLowerCase();
+    listHash = String(body.listHash || '').toLowerCase();
+  } catch { return send(res, 400, { error: 'body must be JSON' }); }
 
   if (!/^[0-9a-f]{64}$/.test(fingerprint))
     return send(res, 400, { error: 'fingerprint must be 64 hex characters' });
+  if (listHash && !/^[0-9a-f]{64}$/.test(listHash))
+    return send(res, 400, { error: 'listHash must be 64 hex characters' });
 
   const startedAt = Date.now();
   try {
-    const result = await anchor(fingerprint);
+    const result = await anchor(fingerprint, listHash);
     send(res, 200, result);
     console.log(`  anchored ${fingerprint.slice(0, 12)}…  tx ${result.txid}`);
     console.log(`  replied in ${((Date.now() - startedAt) / 1000).toFixed(1)}s\n`);

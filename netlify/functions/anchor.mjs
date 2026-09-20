@@ -74,7 +74,26 @@ function loadSdk() {
       if (e.code !== 'MODULE_NOT_FOUND') throw e;
     }
   }
-  throw new Error(`Kaspa SDK not found. Tried: ${tried.join(' | ')}`);
+  // Guessing paths has not worked, so report what is actually deployed.
+  let tree = '';
+  try {
+    const { readdirSync, statSync } = require('node:fs');
+    const walk = (dir, depth = 0) => {
+      if (depth > 2) return;
+      for (const name of readdirSync(dir).slice(0, 25)) {
+        const full = `${dir}/${name}`;
+        let isDir = false;
+        try { isDir = statSync(full).isDirectory(); } catch { /* skip */ }
+        tree += `${'  '.repeat(depth)}${name}${isDir ? '/' : ''}\n`;
+        if (isDir && !name.startsWith('.')) walk(full, depth + 1);
+      }
+    };
+    walk('/var/task');
+  } catch (e) { tree = `could not list /var/task: ${e.message}`; }
+
+  throw new Error(
+    `Kaspa SDK not found.\nTried: ${tried.join(' | ')}\n\nWhat is actually deployed:\n${tree}`
+  );
 }
 
 function withTimeout(promise, ms, what) {
@@ -145,6 +164,12 @@ export async function handler(event) {
   if (!/^[0-9a-f]{64}$/.test(fingerprint))
     return json(400, { error: 'fingerprint must be 64 hex characters' });
 
+  // A second hash covering the names alone. Every attempt at the same raffle
+  // carries it, which is what makes repeat draws countable afterwards.
+  const listHash = String(body.listHash || '').toLowerCase();
+  if (listHash && !/^[0-9a-f]{64}$/.test(listHash))
+    return json(400, { error: 'listHash must be 64 hex characters' });
+
   // --- anchor ---------------------------------------------------------------
   let sdk;
   try { sdk = loadSdk(); }
@@ -170,7 +195,7 @@ export async function handler(event) {
       outputs: [{ address, amount: sdk.kaspaToSompi('0.2') }],
       changeAddress: address,
       priorityFee: 0n,
-      payload: new TextEncoder().encode(PAYLOAD_PREFIX + fingerprint),
+      payload: new TextEncoder().encode(PAYLOAD_PREFIX + fingerprint + (listHash ? ':' + listHash : '')),
       networkId: NETWORK,
     });
 

@@ -469,6 +469,33 @@ async function fingerprint(entrants, winners, targetDaa) {
   return sha256Hex(`fairdraw/1\n${targetDaa}\n${winners}\n${entrants.join('\n')}`);
 }
 
+// A second fingerprint over the NAMES ONLY, sorted. Every attempt at the same
+// raffle therefore carries an identical tag, whatever time it was run at and
+// whatever order the names were typed in. That makes redrawing visible: an
+// organiser can still run a draw twenty times and share only the one they
+// liked, but all twenty attempts are public and carry this same mark.
+async function listFingerprint(entrants) {
+  return sha256Hex('fairdraw/list/1\n' + [...entrants].sort().join('\n'));
+}
+
+// How many times has this exact set of names been committed by the service?
+async function countAttempts(listHash) {
+  const txs = await getJson(
+    `/addresses/${encodeURIComponent(DONATE_ADDRESS)}/full-transactions-page?limit=500`);
+  if (!Array.isArray(txs)) return null;
+
+  let n = 0;
+  for (const tx of txs) {
+    let text = '';
+    try {
+      const hex = String(tx?.payload ?? '');
+      text = new TextDecoder().decode(Uint8Array.from(hex.match(/../g) || [], (b) => parseInt(b, 16)));
+    } catch { continue; }
+    if (text.startsWith('fairdraw:1:') && text.includes(listHash)) n++;
+  }
+  return n;
+}
+
 // Winners come from the block hash by repeated hashing — deterministic, so
 // anyone repeating these steps lands on the same people.
 async function pickWinners(entrants, count, blockHash) {
@@ -813,6 +840,7 @@ async function runCommit() {
 
   const targetDaa = nowScore + minutes * BLOCKS_PER_MINUTE;
   const seal = await fingerprint(entrants, winners, targetDaa);
+  const listHash = await listFingerprint(entrants);
 
   // Record the fingerprint on the chain before the deciding block exists.
   // Without this the maths cannot tell an honest early commitment from one
@@ -823,7 +851,7 @@ async function runCommit() {
     const res = await fetch(ANCHOR_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ fingerprint: seal, targetBlueScore: targetDaa }),
+      body: JSON.stringify({ fingerprint: seal, listHash, targetBlueScore: targetDaa }),
       signal: AbortSignal.timeout(45000),
     });
     anchor = await res.json();
@@ -1042,6 +1070,22 @@ $('verify').addEventListener('click', async () => {
   const anchorTx = grab('Anchor');
   const anchor = await checkAnchor(anchorTx, seal, Number(target));
 
+  // Passing every check still leaves one gap: an organiser can run the same
+  // draw repeatedly and share only the result they liked. Every attempt is
+  // recorded publicly though, so count them and say so plainly.
+  let attempts = null;
+  try { attempts = await countAttempts(await listFingerprint(entrants)); } catch { /* offline */ }
+
+  const attemptsLine = attempts === null ? ''
+    : attempts <= 1
+      ? `<div style="margin-top:.35rem"><span class="good">\u2713</span> This is the only draw ever run with this exact list of names.</div>`
+      : `<div style="margin-top:.35rem"><span class="bad">\u26a0</span> <strong>This same list of names has been drawn ${attempts} times.</strong>
+         <div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">
+           That may be innocent \u2014 a weekly raffle with the same people would look like this.
+           But it also looks like somebody drawing repeatedly and sharing only the result they
+           preferred. Ask which of the ${attempts} you are being shown, and why.
+         </div></div>`;
+
   const anchorLine = `<div style="margin-top:.35rem">${
       anchor.ok === true  ? '<span class="good">\u2713</span> The commitment was recorded on the chain before the draw was decided.'
     : anchor.ok === false ? `<span class="bad">\u2717 ${anchor.note}</span>`
@@ -1053,6 +1097,7 @@ $('verify').addEventListener('click', async () => {
     out.innerHTML = `
       <div style="margin-top:.6rem">
         ${anchorLine}
+        ${attemptsLine}
         <div style="margin-top:.35rem">${sealOk
           ? '<span class="good">\u2713</span> These names match the fingerprint. The list is fixed — the organiser cannot change it now without everyone noticing.'
           : '<span class="bad">\u2717 These names do NOT match the fingerprint.</span>'}</div>
@@ -1105,6 +1150,7 @@ $('verify').addEventListener('click', async () => {
       : '<span style="color:var(--muted)">? The deciding block could not be confirmed against the chain.</span>'}</div>
       ${blockNote ? `<div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">${blockNote}</div>` : ''}
       ${anchorLine}
+      ${attemptsLine}
       ${mine}
       <div style="margin-top:.8rem" class="${sealOk && winnersOk && blockOk === true && anchor.ok === true ? 'good' : 'bad'}">
         ${sealOk && winnersOk && blockOk === true && anchor.ok === true

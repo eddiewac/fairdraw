@@ -773,7 +773,7 @@ function showOrganiserView() {
 }
 
 async function showGuestView(d) {
-  for (const id of ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'verifySection']) $(id)?.classList.add('hidden');
+  for (const id of ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock']) $(id)?.classList.add('hidden');
   $('guest').classList.remove('hidden');
   window.scrollTo(0, 0);
 
@@ -1346,7 +1346,7 @@ $('verify').addEventListener('click', async () => {
   }
 
   // ------------------------------------------------------------- view switching
-  const SANTA_HIDE_ON_GUEST = ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'modeTabs', 'santaCard', 'guest', 'verifySection'];
+  const SANTA_HIDE_ON_GUEST = ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'modeTabs', 'santaCard', 'guest'];
 
   function setMode(mode) {
     const santa = mode === 'santa';

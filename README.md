@@ -17,6 +17,39 @@ blockchain is.
 
 Everyone gets a link. Opening it re-runs every check from scratch.
 
+## Secret Santa
+
+Switch to the **Secret Santa** tab, paste the names, press **Draw names**. About
+three minutes later everyone has a private link that shows only who they are
+buying for. No accounts, nothing stored anywhere: each link carries its own
+result.
+
+How it stays fair *and* secret:
+
+1. The organiser's browser makes a random secret. A fingerprint of the names,
+   the secret's hash and the timing is written to the chain **before** the
+   deciding block exists.
+2. When the block arrives, the matches follow from block + secret + names. One
+   random loop through everyone, so nobody draws themselves and there are no
+   two-person swaps. Optional "keep apart" pairs (couples, etc.) are respected.
+3. Each person's link holds only their own match. Opening it re-checks the
+   on-chain commitment.
+4. After the gifts, the organiser can share the **reveal link**. It contains the
+   secret, so anyone can re-run the whole draw and see every match.
+
+**Group link (optional).** While waiting, the organiser can copy one shared link
+instead of sending individual ones. Everyone opens it, picks their name and sees
+only their own match once the draw is ready. The shared link contains the draw's
+secret, so a determined person could work out everyone's matches. Fine for
+friends and family; use the individual links when that matters.
+
+Limitations: the organiser holds everyone's links and could open them. That is
+the same trust as any Secret Santa site, so open yours first if you're playing.
+Participants can only verify the timing commitment on their own; the full
+matching check happens at reveal. The organiser must keep the page open until
+the links appear. The address bar updates as they go, so history or a bookmark
+recovers it.
+
 ## What is verified
 
 Four things, all of which must pass:

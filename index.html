@@ -160,7 +160,7 @@
 </section>
 
 <div class="hero" id="mainTitle">
-  <p class="kicker">Raffles · prize draws · giveaways</p>
+  <p class="kicker">Raffles · prize draws · Secret Santa</p>
   <h1>Pick a winner<br>nobody can dispute</h1>
   <p class="lede" id="mainLede">Every other way of drawing a name asks people to trust you.
   This one doesn't. Everyone gets a link that proves the draw was fair — and it's free.</p>
@@ -214,6 +214,70 @@
     </tr>
   </table>
 </div>
+
+<div id="modeTabs" class="row" style="gap:.5rem;margin-bottom:1.2rem">
+  <button id="tabRaffle" type="button">Raffle</button>
+  <button id="tabSanta" type="button" class="quiet">Secret Santa</button>
+</div>
+
+<!-- --------------------------------------------------------- secret santa -->
+<section id="santaCard" class="hidden">
+  <h2>Secret Santa</h2>
+
+  <div id="santaForm">
+    <label for="santaNames">Who's playing?</label>
+    <p class="hint">One name per line, at least three. Everyone gets a private link that shows only who they're buying for.</p>
+    <textarea id="santaNames" spellcheck="false" placeholder="Aisha&#10;Tom&#10;Priya&#10;Sam&#10;…"></textarea>
+
+    <div style="margin-top:1rem">
+      <label for="santaBudget">Spending limit <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="santaBudget" placeholder="e.g. $30" maxlength="30" spellcheck="false">
+    </div>
+
+    <details style="margin:1rem 0 1.3rem">
+      <summary style="cursor:pointer;font-size:.88rem;font-weight:600">Keep some people apart (optional)</summary>
+      <p class="hint" style="margin-top:.6rem">For couples, or anyone who shouldn't draw each other. One group per line, joined with &amp;.</p>
+      <textarea id="santaApart" spellcheck="false" style="min-height:5rem" placeholder="Tom &amp; Priya"></textarea>
+    </details>
+
+    <button id="santaGo" type="button">Draw names</button>
+    <p class="status" id="santaStatus"></p>
+  </div>
+
+  <div id="santaWait" class="hidden">
+    <p style="margin:0 0 .4rem"><strong>Shaking the hat…</strong></p>
+    <p class="status" id="santaWaitNote" style="margin-top:0"></p>
+    <p class="hint">Keep this page open. It takes about three minutes and the links appear here when it's done.
+    If you close it by accident, use your browser's back/history to come back to this address.</p>
+  </div>
+
+  <div id="santaLinks" class="hidden">
+    <div class="seal" style="margin-top:0">
+      <h3>Send everyone their link</h3>
+      <p style="margin:.2rem 0 .9rem;font-size:.9rem">Each link shows only that person's match. Don't open anyone else's.
+         If you're playing, open yours first.</p>
+      <div id="santaRows"></div>
+    </div>
+    <div class="seal" style="background:#fff;border-color:var(--line)">
+      <h3 style="color:var(--muted)">After the gifts</h3>
+      <p style="margin:.2rem 0 .8rem;font-size:.9rem">Anyone can use this to check the draw was fair. It shows <em>everyone's</em> match, so keep it until the party.</p>
+      <button class="quiet" id="santaCopyReveal" type="button">Copy the reveal link</button>
+    </div>
+  </div>
+
+  <div id="santaGroupBox" class="hidden" style="margin-top:1.2rem;padding-top:1.1rem;border-top:1px solid var(--line)">
+    <p style="margin:0 0 .3rem;font-weight:600;font-size:.92rem">Or send one link to the whole group</p>
+    <p class="hint" style="margin:0 0 .7rem">Works straight away, even before the draw finishes. Everyone opens it, picks their own name and sees only their match once it's ready.
+    The trade-off: the link holds the draw's secret, so someone determined could work out everyone's matches. Fine for friends and family; use the individual links if that worries you.</p>
+    <button class="quiet" id="santaCopyGroup" type="button">Copy the group link</button>
+  </div>
+</section>
+
+<section id="santaGuest" class="hidden" style="border-color:#cfe2d7">
+  <h2 id="santaGuestHead"></h2>
+  <div id="santaGuestBody"></div>
+  <p style="margin:1.3rem 0 0"><button class="quiet" id="santaOwn" type="button">I want to run my own Secret Santa</button></p>
+</section>
 
 <!-- ------------------------------------------------------------- step one -->
 <section id="setupCard">
@@ -1182,6 +1246,416 @@ $('verify').addEventListener('click', async () => {
       </div>
     </div>`;
 });
+</script>
+
+<script>
+'use strict';
+// ---------------------------------------------------------------- Secret Santa
+// Same idea as the raffle, with one difference: the result is private.
+//
+// The organiser's browser makes a secret and commits to it (and to the names)
+// on the chain BEFORE the deciding block exists. Once the block arrives, the
+// matches follow from block + secret + names. Nobody can predict them
+// beforehand and the organiser cannot re-roll afterwards. Each person's link
+// carries only their own match; the secret stays with the organiser until
+// they publish the reveal link, which lets anyone re-run the whole thing.
+(function () {
+  const SANTA_DELAY_MINUTES = 1;
+
+  const pack = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unpack = (f) => {
+    try { return JSON.parse(decodeURIComponent(escape(atob(f.replace(/-/g, '+').replace(/_/g, '/'))))); }
+    catch { return null; }
+  };
+  const randomHex = (bytes) =>
+    [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const bad = (msg) => `<span class="bad">${msg}</span>`;
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ------------------------------------------------------------- the maths
+  const apartCanon = (pairs) => pairs.map((p) => p.join('-')).join(';');
+  const apartHash = (pairs) => sha256Hex('fairdraw/santa/apart/1\n' + apartCanon(pairs));
+  const secretHash = (secret) => sha256Hex('fairdraw/santa/secret/1\n' + secret);
+  const santaFingerprint = (names, xHash, sHash, targetDaa) =>
+    sha256Hex(`fairdraw/santa/1\n${targetDaa}\n${sHash}\n${xHash}\n${names.join('\n')}`);
+
+  // One random loop through everyone: each person buys for the next in the
+  // loop. Nobody draws themselves and there are no two-person swaps. If the
+  // loop breaks a "keep apart" rule, try the next one — deterministic, so
+  // anyone re-running it with the same inputs lands on the same result.
+  async function santaAssign(names, pairs, secret, blockSeed) {
+    const n = names.length;
+    const banned = new Set();
+    for (const [a, b] of pairs) { banned.add(a + '>' + b); banned.add(b + '>' + a); }
+    for (let attempt = 0; attempt < 2000; attempt++) {
+      let step = 0;
+      const rnd = async (m) =>
+        parseInt((await sha256Hex(`${blockSeed}/${secret}/${attempt}/${step++}`)).slice(0, 13), 16) % m;
+      const order = [...names.keys()];
+      for (let i = n - 1; i > 0; i--) {
+        const j = await rnd(i + 1);
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      const to = new Array(n);
+      let ok = true;
+      for (let k = 0; k < n && ok; k++) {
+        const giver = order[k], receiver = order[(k + 1) % n];
+        if (banned.has(giver + '>' + receiver)) ok = false;
+        to[giver] = receiver;
+      }
+      if (ok) return to;
+    }
+    return null;
+  }
+
+  function parseApart(text, names) {
+    const lookup = new Map(names.map((nm, i) => [nm.toLowerCase(), i]));
+    const found = new Set();
+    for (const line of text.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      const parts = line.split(/\s*[&+,]\s*/).map((x) => x.trim()).filter(Boolean);
+      if (parts.length < 2) return { error: `"${esc(line)}" needs two names, like Tom &amp; Priya.` };
+      const ids = [];
+      for (const part of parts) {
+        if (!lookup.has(part.toLowerCase())) return { error: `"${esc(part)}" isn't in the list of players.` };
+        ids.push(lookup.get(part.toLowerCase()));
+      }
+      for (let i = 0; i < ids.length; i++)
+        for (let j = i + 1; j < ids.length; j++)
+          if (ids[i] !== ids[j]) found.add(Math.min(ids[i], ids[j]) + '-' + Math.max(ids[i], ids[j]));
+    }
+    const pairs = [...found].map((k) => k.split('-').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    return { pairs };
+  }
+
+  // ------------------------------------------------------------- view switching
+  const SANTA_HIDE_ON_GUEST = ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'modeTabs', 'santaCard', 'guest'];
+
+  function setMode(mode) {
+    const santa = mode === 'santa';
+    $('santaCard').classList.toggle('hidden', !santa);
+    $('setupCard').classList.toggle('hidden', santa);
+    $('drawCard').classList.toggle('hidden', santa || !draw);
+    $('tabSanta').classList.toggle('quiet', !santa);
+    $('tabRaffle').classList.toggle('quiet', santa);
+    $('stepsBlock').classList.toggle('hidden', santa);
+    $('versusBlock').classList.toggle('hidden', santa);
+  }
+  $('tabRaffle').addEventListener('click', () => setMode('raffle'));
+  $('tabSanta').addEventListener('click', () => setMode('santa'));
+
+  $('santaOwn').addEventListener('click', () => {
+    $('santaGuest').classList.add('hidden');
+    for (const id of ['mainTitle', 'modeTabs']) $(id).classList.remove('hidden');
+    history.replaceState(null, '', location.pathname);
+    $('santaForm').classList.remove('hidden');
+    $('santaWait').classList.add('hidden');
+    $('santaLinks').classList.add('hidden');
+    $('santaGroupBox').classList.add('hidden');
+    setMode('santa');
+  });
+
+  // ------------------------------------------------------------- organiser
+  let polling = 0;
+
+  $('santaGo').addEventListener('click', async () => {
+    $('santaGo').disabled = true;
+    try { await santaStart(); }
+    catch (e) { console.error(e); $('santaStatus').innerHTML = bad(esc(e.message)); }
+    finally { $('santaGo').disabled = false; }
+  });
+
+  async function santaStart() {
+    const status = $('santaStatus');
+    const names = cleanEntrants($('santaNames').value);
+    const budget = $('santaBudget').value.trim();
+
+    if (names.length < 3) { status.innerHTML = bad('Add at least three names.'); return; }
+    const seen = new Set();
+    for (const nm of names) {
+      if (seen.has(nm.toLowerCase())) { status.innerHTML = bad(`"${esc(nm)}" is in the list twice. Give each person a different name.`); return; }
+      seen.add(nm.toLowerCase());
+    }
+    const apart = parseApart($('santaApart').value, names);
+    if (apart.error) { status.innerHTML = bad(apart.error); return; }
+
+    // Fail now, not after the commitment is on the chain.
+    if (!(await santaAssign(names, apart.pairs, 'check', randomHex(16)))) {
+      status.innerHTML = bad('Those "keep apart" rules leave no way to draw. Remove one and try again.');
+      return;
+    }
+
+    status.textContent = 'Reading the chain…';
+    const nowScore = await currentBlueScore();
+    const targetDaa = nowScore + SANTA_DELAY_MINUTES * BLOCKS_PER_MINUTE;
+
+    const secret = randomHex(16);
+    const sHash = await secretHash(secret);
+    const xHash = await apartHash(apart.pairs);
+    const seal = await santaFingerprint(names, xHash, sHash, targetDaa);
+    const listHash = await listFingerprint(names);
+
+    status.textContent = 'Locking it in…';
+    let anchor;
+    try {
+      const res = await fetch(ANCHOR_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ fingerprint: seal, listHash, targetBlueScore: targetDaa }),
+        signal: AbortSignal.timeout(45000),
+      });
+      anchor = await res.json();
+      if (!res.ok || !anchor.txid) throw new Error(anchor.error || `anchor service returned ${res.status}`);
+      const landed = Number(anchor.anchoredAtBlueScore);
+      if (Number.isFinite(landed) && landed >= targetDaa - 60)
+        throw new Error('the commitment landed too close to the deciding moment. Try again.');
+    } catch (e) {
+      const why = e.name === 'TimeoutError' ? 'the recording service did not answer within 45 seconds' : e.message;
+      status.innerHTML = bad(`Could not lock it in: ${esc(why)}. Nothing was drawn. Try again.`);
+      return;
+    }
+
+    const org = { n: names, t: targetDaa, a: anchor.txid, s: secret, x: apart.pairs, b: budget };
+    history.replaceState(null, '', `${location.pathname}#santaorg=${pack(org)}`);
+    status.textContent = '';
+    santaRun(org);
+  }
+
+  function santaRun(org) {
+    setMode('santa');
+    $('santaForm').classList.add('hidden');
+    $('santaLinks').classList.add('hidden');
+    $('santaWait').classList.remove('hidden');
+    $('santaGroupBox').classList.remove('hidden');
+    const groupUrl = `${location.origin}${location.pathname}#santagroup=${pack({ n: org.n, t: org.t, a: org.a, s: org.s, x: org.x, b: org.b })}`;
+    $('santaCopyGroup').onclick = async () => {
+      try { await navigator.clipboard.writeText(groupUrl); $('santaCopyGroup').textContent = 'Copied ✓'; }
+      catch { window.prompt('Copy this link:', groupUrl); }
+      setTimeout(() => { $('santaCopyGroup').textContent = 'Copy the group link'; }, 1800);
+    };
+    const mine = ++polling;
+
+    (async () => {
+      while (mine === polling) {
+        let note = '', seed = null;
+        try {
+          const now = await currentBlueScore();
+          if (now < org.t) {
+            const left = org.t - now;
+            note = `Locked in. About ${left < BLOCKS_PER_MINUTE ? Math.ceil(left / 10) + ' seconds' : Math.ceil(left / BLOCKS_PER_MINUTE) + ' min'} until the deciding moment…`;
+          } else if (now < org.t + SETTLE_BLOCKS) {
+            const left = org.t + SETTLE_BLOCKS - now;
+            note = `Deciding moment passed. Letting it settle, about ${Math.ceil(left / BLOCKS_PER_MINUTE)} more min…`;
+          } else {
+            seed = await decidingSeed(org.t);
+            if (!seed) note = 'Waiting for the deciding block to show up…';
+          }
+        } catch (e) { note = `Can't reach the chain right now (${e.message}). Retrying…`; }
+
+        $('santaWaitNote').textContent = note;
+        if (seed) { await santaFinish(org, seed.seed); return; }
+        await sleep(6000);
+      }
+    })();
+  }
+
+  async function santaFinish(org, blockSeed) {
+    const to = await santaAssign(org.n, org.x, org.s, blockSeed);
+    if (!to) { $('santaWaitNote').innerHTML = bad('Could not build a valid draw from these rules.'); return; }
+
+    const h = await secretHash(org.s);
+    const xh = await apartHash(org.x);
+    const base = `${location.origin}${location.pathname}#`;
+    const rows = $('santaRows');
+    rows.innerHTML = '';
+
+    for (let i = 0; i < org.n.length; i++) {
+      const url = base + 'santa=' + pack({ n: org.n, t: org.t, a: org.a, h, xh, b: org.b, me: i, to: to[i] });
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.45rem 0;border-top:1px solid #c9dfd3';
+      const label = document.createElement('span');
+      label.style.flex = '1';
+      label.textContent = org.n[i];
+      const copy = document.createElement('button');
+      copy.type = 'button'; copy.className = 'quiet'; copy.textContent = 'Copy link';
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(url); copy.textContent = 'Copied ✓'; }
+        catch { window.prompt('Copy this link:', url); }
+        setTimeout(() => { copy.textContent = 'Copy link'; }, 1800);
+      });
+      row.append(label, copy);
+      if (navigator.share) {
+        const share = document.createElement('button');
+        share.type = 'button'; share.textContent = 'Send';
+        share.addEventListener('click', () =>
+          navigator.share({ title: 'Secret Santa', text: `${org.n[i]}, here's your Secret Santa. Tap to see who you've got:`, url }).catch(() => {}));
+        row.append(share);
+      }
+      rows.append(row);
+    }
+
+    const reveal = base + 'santareveal=' + pack({ n: org.n, t: org.t, a: org.a, s: org.s, x: org.x, b: org.b });
+    $('santaCopyReveal').onclick = async () => {
+      try { await navigator.clipboard.writeText(reveal); $('santaCopyReveal').textContent = 'Copied ✓'; }
+      catch { window.prompt('Copy this link:', reveal); }
+    };
+
+    $('santaWait').classList.add('hidden');
+    $('santaLinks').classList.remove('hidden');
+  }
+
+  // ------------------------------------------------------------- guest views
+  function showSantaShell(head) {
+    for (const id of SANTA_HIDE_ON_GUEST) $(id)?.classList.add('hidden');
+    $('santaGuest').classList.remove('hidden');
+    $('santaGuestHead').textContent = head;
+  }
+
+  function anchorLine(anchor) {
+    return anchor.ok === true
+      ? '<span class="good">\u2713</span> This draw was locked in on a public chain before it was decided, so nobody could have fixed it.'
+      : anchor.ok === false ? `<span class="bad">\u2717 ${esc(anchor.note)}</span>`
+      : '<span style="color:var(--muted)">Could not reach the chain to check this. Try again shortly.</span>';
+  }
+
+  async function showSantaGuest(d) {
+    showSantaShell(`Hi ${d.n[d.me]}`);
+    const body = $('santaGuestBody');
+    body.innerHTML = `
+      <p style="margin:0 0 1rem">You're in a Secret Santa. Make sure nobody's looking over your shoulder, then tap.</p>
+      <button id="santaTap" type="button">Show me who I got</button>
+      <div id="santaResult" class="hidden"></div>
+      <div id="santaCheck" style="margin-top:1.2rem;font-size:.88rem;color:var(--muted)">Checking the draw against the chain…</div>`;
+
+    $('santaTap').addEventListener('click', () => {
+      $('santaTap').classList.add('hidden');
+      const box = $('santaResult');
+      box.innerHTML = `<div class="seal" style="text-align:center;margin-top:0">
+          <h3>You're buying for</h3>
+          <div style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:2.2rem;line-height:1.1;margin:.4rem 0 .2rem" id="santaTarget"></div>
+          <div id="santaBudgetNote" style="font-size:.95rem"></div>
+        </div>
+        <p style="font-size:.9rem;margin:.8rem 0 0">Keep it secret \ud83e\udd2b</p>`;
+      box.classList.remove('hidden');
+      $('santaTarget').textContent = d.n[d.to];
+      if (d.b) $('santaBudgetNote').textContent = `Spending limit: ${d.b}`;
+    });
+
+    const seal = await santaFingerprint(d.n, d.xh, d.h, d.t);
+    const anchor = await checkAnchor(d.a, seal, d.t);
+    $('santaCheck').innerHTML = anchorLine(anchor);
+  }
+
+  async function showSantaReveal(d) {
+    showSantaShell('How this Secret Santa was drawn');
+    const body = $('santaGuestBody');
+    body.innerHTML = '<p style="color:var(--muted)">Re-running the draw from scratch…</p>';
+
+    const h = await secretHash(d.s);
+    const xh = await apartHash(d.x);
+    const seal = await santaFingerprint(d.n, xh, h, d.t);
+    const anchor = await checkAnchor(d.a, seal, d.t);
+
+    let seed = null, note = '';
+    try {
+      const now = await currentBlueScore();
+      if (now >= d.t + SETTLE_BLOCKS) seed = await decidingSeed(d.t);
+      else note = 'The deciding moment has not settled yet.';
+    } catch (e) { note = `Could not reach the chain (${e.message}).`; }
+
+    let table = '';
+    if (seed) {
+      const to = await santaAssign(d.n, d.x, d.s, seed.seed);
+      if (to) {
+        table = '<div class="seal"><h3>Who bought for who</h3><ul style="list-style:none;margin:.4rem 0 0;padding:0">' +
+          d.n.map((nm, i) => `<li style="padding:.25rem 0">${esc(nm)} <span style="color:var(--muted)">\u2192</span> <strong>${esc(d.n[to[i]])}</strong></li>`).join('') +
+          '</ul></div>';
+      }
+    }
+    body.innerHTML = `${table || `<p>${esc(note || 'Could not rebuild the draw.')}</p>`}
+      <div style="margin-top:1rem;font-size:.9rem">${anchorLine(anchor)}</div>
+      <div style="margin-top:.5rem;font-size:.86rem;color:var(--muted)">
+        The names and the organiser's secret were fingerprinted and recorded on the chain before the deciding block existed.
+        The matches above follow from those three things and nothing else.
+      </div>`;
+  }
+
+  async function showSantaGroup(d) {
+    showSantaShell('Secret Santa');
+    const body = $('santaGuestBody');
+    body.innerHTML = `
+      <p style="margin:0 0 .8rem">Pick your name, then tap to see who you're buying for. Make sure nobody's looking.</p>
+      <label for="santaPick">Who are you?</label>
+      <select id="santaPick"><option value="">Choose your name…</option></select>
+      <p style="margin:1rem 0 0"><button id="santaShow" type="button">Show me who I got</button></p>
+      <div id="santaResult" class="hidden" style="margin-top:1rem"></div>
+      <div id="santaCheck" style="margin-top:1.2rem;font-size:.88rem;color:var(--muted)">Checking the draw against the chain…</div>`;
+    d.n.forEach((nm, i) => {
+      const o = document.createElement('option');
+      o.value = String(i); o.textContent = nm;
+      $('santaPick').appendChild(o);
+    });
+
+    let cached = null;
+    $('santaShow').addEventListener('click', async () => {
+      const box = $('santaResult');
+      const pick = $('santaPick').value;
+      if (pick === '') { box.innerHTML = bad('Choose your name first.'); box.classList.remove('hidden'); return; }
+      box.classList.remove('hidden');
+      box.innerHTML = '<span style="color:var(--muted)">Checking…</span>';
+      try {
+        if (!cached) {
+          const now = await currentBlueScore();
+          if (now < d.t + SETTLE_BLOCKS) {
+            const mins = Math.max(1, Math.ceil((d.t + SETTLE_BLOCKS - now) / BLOCKS_PER_MINUTE));
+            box.innerHTML = `<strong>Not drawn yet.</strong> About ${mins} minute${mins > 1 ? 's' : ''} to go. Come back to this link and tap again.`;
+            return;
+          }
+          const seed = await decidingSeed(d.t);
+          if (!seed) { box.innerHTML = 'Waiting for the deciding block to show up. Try again in a minute.'; return; }
+          cached = await santaAssign(d.n, d.x || [], d.s, seed.seed);
+          if (!cached) { box.innerHTML = bad('Could not build a valid draw from these rules.'); return; }
+        }
+        const me = Number(pick);
+        box.innerHTML = `<div class="seal" style="text-align:center;margin-top:0">
+            <h3>You're buying for</h3>
+            <div style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:2.2rem;line-height:1.1;margin:.4rem 0 .2rem" id="santaTarget"></div>
+            <div id="santaBudgetNote" style="font-size:.95rem"></div>
+          </div>
+          <p style="font-size:.9rem;margin:.8rem 0 0">Keep it secret \ud83e\udd2b</p>`;
+        $('santaTarget').textContent = d.n[cached[me]];
+        if (d.b) $('santaBudgetNote').textContent = `Spending limit: ${d.b}`;
+      } catch (e) {
+        box.innerHTML = bad(`Could not reach the chain (${esc(e.message)}). Try again.`);
+      }
+    });
+
+    const h = await secretHash(d.s);
+    const xh = await apartHash(d.x || []);
+    const seal = await santaFingerprint(d.n, xh, h, d.t);
+    $('santaCheck').innerHTML = anchorLine(await checkAnchor(d.a, seal, d.t));
+  }
+
+  // ------------------------------------------------------------- entry points
+  const hash = location.hash;
+  const m = hash.match(/^#(santaorg|santagroup|santa|santareveal)=(.+)$/);
+  if (m) {
+    const d = unpack(m[2]);
+    const okShape = d && Array.isArray(d.n) && d.n.length >= 3 && d.t;
+    if (!okShape) {
+      $('setupStatus').innerHTML = '<span class="bad">That link is damaged. Ask for it again.</span>';
+    } else if (m[1] === 'santaorg' && d.s) {
+      santaRun(d);
+    } else if (m[1] === 'santa' && Number.isInteger(d.me) && Number.isInteger(d.to) && d.n[d.me] && d.n[d.to]) {
+      showSantaGuest(d);
+    } else if (m[1] === 'santagroup' && d.s) {
+      showSantaGroup(d);
+    } else if (m[1] === 'santareveal' && d.s) {
+      showSantaReveal({ ...d, x: d.x || [] });
+    }
+  }
+})();
 </script>
 </body>
 </html>

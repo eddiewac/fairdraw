@@ -1086,7 +1086,7 @@ $('copyResult').addEventListener('click', () => {
 // -------------------------------------------------------------- step three
 
 $('verify').addEventListener('click', async () => {
-  const raw = $('verifyIn').value;
+  let raw = $('verifyIn').value;
   const out = $('verifyOut');
 
   // A pasted link (raffle or Secret Santa) is checked by opening it here: the
@@ -1096,11 +1096,19 @@ $('verify').addEventListener('click', async () => {
     return;
   }
   const linked = raw.match(/#(santa|santagroup|santareveal|draw)=([A-Za-z0-9_-]+)/);
-  if (linked) {
-    out.textContent = 'Opening that draw…';
-    history.scrollRestoration = 'manual';
-    history.replaceState(null, '', `${location.pathname}#${linked[1]}=${linked[2]}`);
-    location.reload();
+  if (linked && linked[1] === 'draw') {
+    // A raffle link: rebuild the same text the organiser would have copied, then
+    // let the normal check below do its full on-chain work on it.
+    const dd = decodeDraw(linked[2]);
+    if (!dd) { out.innerHTML = '<span class="bad">That link is damaged. Ask for it again.</span>'; return; }
+    const seal0 = await fingerprint(dd.entrants, dd.winners, dd.targetDaa);
+    raw = `Fair Draw\nWinners: ${dd.winners}\nChain position: ${dd.targetDaa}\n` +
+          `Fingerprint: ${seal0}\nAnchor: ${dd.anchorTx || ''}\n---\n${dd.entrants.join('\n')}\n`;
+  } else if (linked) {
+    const dd = window.santaUnpack?.(linked[2]);
+    if (!dd || !Array.isArray(dd.n) || !dd.t) { out.innerHTML = '<span class="bad">That link is damaged. Ask for it again.</span>'; return; }
+    out.innerHTML = '<span style="color:var(--muted)">Checking it against the chain…</span>';
+    await window.verifySantaLink(linked[1], dd, out, $('myName').value.trim());
     return;
   }
 
@@ -1535,6 +1543,116 @@ $('verify').addEventListener('click', async () => {
       : anchor.ok === false ? `<span class="bad">\u2717 ${esc(anchor.note)}</span>`
       : '<span style="color:var(--muted)">Could not reach the chain to check this. Try again shortly.</span>';
   }
+
+  // Full on-chain report for a pasted Secret Santa link, shown in the "Check a
+  // draw" box. Personal links only hold one person's match, so the matching
+  // itself cannot be re-run from them. Group and reveal links carry the secret,
+  // so they can be. The group link's matches stay hidden: this is a check, not
+  // a spoiler.
+  window.santaUnpack = unpack;
+  window.verifySantaLink = async function (kind, d, out, myName) {
+    const names = d.n;
+    const hasSecret = typeof d.s === 'string' && d.s.length > 0;
+    const h = hasSecret ? await secretHash(d.s) : d.h;
+    const xh = hasSecret ? await apartHash(d.x || []) : d.xh;
+    if (!h || !xh) { out.innerHTML = bad('That link is missing information. Ask for it again.'); return; }
+
+    const seal = await santaFingerprint(names, xh, h, d.t);
+    const anchor = await checkAnchor(d.a, seal, d.t);
+
+    let now = null;
+    try { now = await currentBlueScore(); } catch { /* reported below */ }
+    const settled = now !== null && now >= d.t + SETTLE_BLOCKS;
+
+    const row = (html) => `<div style="margin-top:.35rem">${html}</div>`;
+    const small = (t) => `<div style="margin-top:.3rem;font-size:.84rem;color:var(--muted)">${t}</div>`;
+    const ok = '<span class="good">\u2713</span> ';
+    const no = '<span class="bad">\u2717</span> ';
+
+    let lines = '';
+    lines += anchor.ok === true
+      ? row(ok + 'The names, the rules and the organiser\u2019s secret were recorded on the chain before the draw was decided.') + small(esc(anchor.note))
+      : anchor.ok === false
+        ? row(no + esc(anchor.note))
+        : row('<span style="color:var(--muted)">? The record on the chain could not be confirmed yet.</span>') +
+          small(esc(anchor.note) + ' This is common in the first minute or two. Press Check it again shortly.');
+
+    let matchOk = null, table = '', blockSeed = null;
+    if (hasSecret) {
+      if (!settled) {
+        const left = now === null ? null : Math.max(1, Math.ceil((d.t + SETTLE_BLOCKS - now) / BLOCKS_PER_MINUTE));
+        lines += row('<span style="color:var(--muted)">? The deciding block has not settled yet' +
+          (left ? ` (about ${left} more minute${left > 1 ? 's' : ''})` : '') + '. Check again after that.</span>');
+      } else {
+        try {
+          const seed = await decidingSeed(d.t);
+          if (!seed) {
+            lines += row('<span style="color:var(--muted)">? No blocks are recorded at the deciding moment yet.</span>');
+          } else {
+            blockSeed = seed.seed;
+            const to = await santaAssign(names, d.x || [], d.s, seed.seed);
+            if (!to) {
+              matchOk = false;
+              lines += row(no + 'No valid draw can be built from this secret, block and these rules.');
+            } else {
+              const n = names.length;
+              const banned = new Set((d.x || []).flatMap(([a, b]) => [a + '>' + b, b + '>' + a]));
+              let valid = new Set(to).size === n && to.every((v, i) => v !== i);
+              let steps = 0, at = 0;
+              do { at = to[at]; steps++; } while (at !== 0 && steps <= n);
+              valid = valid && steps === n && to.every((v, i) => !banned.has(i + '>' + v));
+              matchOk = valid;
+              lines += row((valid ? ok : no) + (valid
+                ? 'The matches follow from the secret, the deciding block and the names. Nobody draws themselves, everyone gives and receives exactly once, and the keep-apart rules are respected.'
+                : 'The matches break the rules (someone draws themselves, or twice, or a keep-apart pair).'));
+              if (kind === 'santareveal') {
+                table = '<div class="seal"><h3>Who bought for who</h3><ul style="list-style:none;margin:.4rem 0 0;padding:0">' +
+                  names.map((nm, i) => `<li style="padding:.25rem 0">${esc(nm)} <span style="color:var(--muted)">\u2192</span> <strong>${esc(names[to[i]])}</strong></li>`).join('') + '</ul></div>';
+              } else {
+                lines += small('This is a group link, so the individual matches are not shown here.');
+              }
+            }
+          }
+        } catch (e) {
+          lines += row(`<span style="color:var(--muted)">? Could not reach the chain to rebuild the draw (${esc(e.message)}).</span>`);
+        }
+      }
+    } else {
+      const sane = Number.isInteger(d.me) && Number.isInteger(d.to) && names[d.me] && names[d.to] && d.me !== d.to;
+      lines += row((sane ? ok : no) + (sane ? 'This link\u2019s match is a different person from the one holding it.' : 'This link\u2019s match looks wrong.'));
+      lines += small('A personal link holds only one person\u2019s match, so the matching itself cannot be re-run from it. After the gifts, ask the organiser for the reveal link and paste that here to check the whole draw.');
+    }
+
+    let mine = '';
+    if (myName) {
+      const at = [];
+      names.forEach((nm, i) => { if (nm.toLowerCase() === myName.toLowerCase()) at.push(i + 1); });
+      mine = row(at.length ? ok + `<strong>${esc(myName)}</strong> is in the draw.` : no + `${esc(myName)} is not in this list.`);
+    }
+
+    const verdictGood = anchor.ok === true && (hasSecret ? matchOk === true : true);
+    const verdictBad = anchor.ok === false || matchOk === false;
+    const verdict = verdictBad ? 'This draw does not hold up.'
+      : verdictGood ? (hasSecret ? 'This draw holds up. Everything checks out against the chain.'
+                                 : 'The timing proof holds up against the chain.')
+      : 'Some checks could not be completed yet. Try again shortly.';
+
+    out.innerHTML = `<div style="margin-top:.6rem">
+        ${lines}
+        ${mine}
+        <div style="margin-top:.8rem" class="${verdictBad ? 'bad' : verdictGood ? 'good' : ''}">${verdict}</div>
+        ${table}
+        <div class="working" style="margin-top:1rem"><dl>
+          <dt>Players</dt><dd>${names.length}</dd>
+          <dt>Deciding position</dt><dd>chain position ${Number(d.t).toLocaleString()}</dd>
+          <dt>Fingerprint</dt><dd class="mono">${seal}</dd>
+          <dt>Secret\u2019s fingerprint</dt><dd class="mono">${h}</dd>
+          <dt>Public record</dt><dd class="mono">${/^[0-9a-f]{64}$/i.test(d.a || '') ? `<a href="https://kaspa.stream/transaction/${d.a}" target="_blank" rel="noopener" style="color:var(--prize)">${d.a}</a>` : 'none quoted'}</dd>
+          ${anchor.at ? `<dt>Recorded at</dt><dd>chain position ${Number(anchor.at).toLocaleString()}</dd>` : ''}
+          ${blockSeed ? `<dt>Deciding number</dt><dd class="mono">${blockSeed}</dd>` : ''}
+        </dl></div>
+      </div>`;
+  };
 
   // The record is written seconds before the link is shared, and the public
   // API can take a little while to index it. "Not found yet" is therefore

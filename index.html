@@ -390,11 +390,11 @@
 <section>
   <h2>3 · Check a draw someone sent you</h2>
   <p class="hint" style="margin-top:-.5rem">
-    If you were sent a link, just open it — there is nothing to do here. This is
-    for checking a draw that arrived as text. It works everything out again from
-    scratch and tells you whether it stands up.
+    Paste a link here (a raffle link or a Secret Santa link) or text the organiser
+    sent you. It works everything out again from scratch and tells you whether it
+    stands up.
   </p>
-  <textarea id="verifyIn" spellcheck="false" placeholder="Paste what the organiser sent you — before or after the draw…"></textarea>
+  <textarea id="verifyIn" spellcheck="false" placeholder="Paste a link, or what the organiser sent you…"></textarea>
 
   <div class="row" style="margin-top:1rem;align-items:flex-end">
     <div style="flex:2">
@@ -1088,6 +1088,19 @@ $('verify').addEventListener('click', async () => {
   const raw = $('verifyIn').value;
   const out = $('verifyOut');
 
+  // A pasted link (raffle or Secret Santa) is checked by opening it here: the
+  // page already knows how to verify those when it loads from a link.
+  if (/#santaorg=/.test(raw)) {
+    out.innerHTML = '<span class="bad">That is the organiser\u2019s private link. Don\u2019t share it. To check a draw, use a personal link, the group link or the reveal link instead.</span>';
+    return;
+  }
+  const linked = raw.match(/#(santa|santagroup|santareveal|draw)=([A-Za-z0-9_-]+)/);
+  if (linked) {
+    history.replaceState(null, '', `${location.pathname}#${linked[1]}=${linked[2]}`);
+    location.reload();
+    return;
+  }
+
   const grab = (label) => (raw.match(new RegExp(`${label}:\\s*(.+)`)) || [])[1]?.trim();
   const seal = grab('Fingerprint');
   const target = grab('Chain position');
@@ -1519,6 +1532,29 @@ $('verify').addEventListener('click', async () => {
       : '<span style="color:var(--muted)">Could not reach the chain to check this. Try again shortly.</span>';
   }
 
+  // The record is written seconds before the link is shared, and the public
+  // API can take a little while to index it. "Not found yet" is therefore
+  // normal early on, not a failure: say so, keep retrying, then offer a button.
+  async function verifyInto(el, txid, getSeal, target) {
+    let last = null;
+    for (let attempt = 0; attempt < 24; attempt++) {
+      try {
+        last = await checkAnchor(txid, await getSeal(), target);
+      } catch (e) {
+        last = { ok: null, note: e.message };
+      }
+      if (last.ok !== null) { el.innerHTML = anchorLine(last); return; }
+      el.innerHTML = '<span style="color:var(--muted)">The public record is not showing up on the chain yet. This is normal in the first minute or two. Checking again…</span>';
+      await sleep(5000);
+    }
+    el.innerHTML = '<span style="color:var(--muted)">Still can\u2019t see the public record' +
+      (last?.note ? ` (${esc(last.note)})` : '') + '. </span>';
+    const again = document.createElement('button');
+    again.type = 'button'; again.className = 'quiet'; again.textContent = 'Check again';
+    again.addEventListener('click', () => verifyInto(el, txid, getSeal, target));
+    el.appendChild(again);
+  }
+
   async function showSantaGuest(d) {
     showSantaShell(`Hi ${d.n[d.me]}`);
     const body = $('santaGuestBody');
@@ -1542,9 +1578,7 @@ $('verify').addEventListener('click', async () => {
       if (d.b) $('santaBudgetNote').textContent = `Spending limit: ${d.b}`;
     });
 
-    const seal = await santaFingerprint(d.n, d.xh, d.h, d.t);
-    const anchor = await checkAnchor(d.a, seal, d.t);
-    $('santaCheck').innerHTML = anchorLine(anchor);
+    await verifyInto($('santaCheck'), d.a, () => santaFingerprint(d.n, d.xh, d.h, d.t), d.t);
   }
 
   async function showSantaReveal(d) {
@@ -1631,10 +1665,8 @@ $('verify').addEventListener('click', async () => {
       }
     });
 
-    const h = await secretHash(d.s);
-    const xh = await apartHash(d.x || []);
-    const seal = await santaFingerprint(d.n, xh, h, d.t);
-    $('santaCheck').innerHTML = anchorLine(await checkAnchor(d.a, seal, d.t));
+    await verifyInto($('santaCheck'), d.a, async () =>
+      santaFingerprint(d.n, await apartHash(d.x || []), await secretHash(d.s), d.t), d.t);
   }
 
   // ------------------------------------------------------------- entry points

@@ -387,7 +387,7 @@
 </section>
 
 <!-- ----------------------------------------------------------- step three -->
-<section>
+<section id="verifySection">
   <h2>3 · Check a draw someone sent you</h2>
   <p class="hint" style="margin-top:-.5rem">
     Paste a link here (a raffle link or a Secret Santa link) or text the organiser
@@ -768,13 +768,14 @@ if ($('donateAddr')) {
 // came for and put the setup form away.
 function showOrganiserView() {
   $('guest').classList.add('hidden');
-  for (const id of ['setupCard', 'mainTitle', 'stepsBlock', 'versusBlock']) $(id)?.classList.remove('hidden');
+  for (const id of ['setupCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'verifySection']) $(id)?.classList.remove('hidden');
   history.replaceState(null, '', location.pathname);
 }
 
 async function showGuestView(d) {
-  for (const id of ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock']) $(id)?.classList.add('hidden');
+  for (const id of ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'verifySection']) $(id)?.classList.add('hidden');
   $('guest').classList.remove('hidden');
+  window.scrollTo(0, 0);
 
   const ol = $('guestList');
   ol.innerHTML = '';
@@ -1096,6 +1097,8 @@ $('verify').addEventListener('click', async () => {
   }
   const linked = raw.match(/#(santa|santagroup|santareveal|draw)=([A-Za-z0-9_-]+)/);
   if (linked) {
+    out.textContent = 'Opening that draw…';
+    history.scrollRestoration = 'manual';
     history.replaceState(null, '', `${location.pathname}#${linked[1]}=${linked[2]}`);
     location.reload();
     return;
@@ -1343,7 +1346,7 @@ $('verify').addEventListener('click', async () => {
   }
 
   // ------------------------------------------------------------- view switching
-  const SANTA_HIDE_ON_GUEST = ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'modeTabs', 'santaCard', 'guest'];
+  const SANTA_HIDE_ON_GUEST = ['setupCard', 'drawCard', 'mainTitle', 'stepsBlock', 'versusBlock', 'modeTabs', 'santaCard', 'guest', 'verifySection'];
 
   function setMode(mode) {
     const santa = mode === 'santa';
@@ -1360,7 +1363,7 @@ $('verify').addEventListener('click', async () => {
 
   $('santaOwn').addEventListener('click', () => {
     $('santaGuest').classList.add('hidden');
-    for (const id of ['mainTitle', 'modeTabs']) $(id).classList.remove('hidden');
+    for (const id of ['mainTitle', 'modeTabs', 'verifySection']) $(id).classList.remove('hidden');
     history.replaceState(null, '', location.pathname);
     $('santaForm').classList.remove('hidden');
     $('santaWait').classList.add('hidden');
@@ -1523,6 +1526,7 @@ $('verify').addEventListener('click', async () => {
     for (const id of SANTA_HIDE_ON_GUEST) $(id)?.classList.add('hidden');
     $('santaGuest').classList.remove('hidden');
     $('santaGuestHead').textContent = head;
+    window.scrollTo(0, 0);
   }
 
   function anchorLine(anchor) {
